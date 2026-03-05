@@ -5,7 +5,6 @@ using Embotelladora.Facturacion.Desktop.Data;
 using Embotelladora.Facturacion.Desktop.Features.Clientes;
 using Embotelladora.Facturacion.Desktop.Features.Dashboard;
 using Embotelladora.Facturacion.Desktop.Features.Facturas;
-using Embotelladora.Facturacion.Desktop.Features.Inventario;
 
 namespace Embotelladora.Facturacion.Desktop;
 
@@ -15,7 +14,6 @@ public partial class Form1 : Form
     private readonly CustomerRepository _customerRepository = new();
     private readonly InvoiceRepository _invoiceRepository = new();
     private readonly PaymentRepository _paymentRepository = new();
-    private readonly InventoryRepository _inventoryRepository = new();
     private readonly Dictionary<string, Button> _menuButtons = [];
     private readonly BindingList<InvoiceItemDraft> _invoiceItems = [];
     private FlowLayoutPanel _sidebarMenu = null!;
@@ -71,17 +69,6 @@ public partial class Form1 : Form
     private TextBox _txtPaymentNotes = null!;
     private Label _lblPaymentBalance = null!;
     private Label _lblPaymentTotal = null!;
-
-    // Inventory module fields
-    private Panel _inventoryView = null!;
-    private Panel _newProductView = null!;
-    private Label _lblInventoryValue = null!;
-    private Label _lblTotalProducts = null!;
-    private Label _lblLowStockCount = null!;
-    private Label _lblOutOfStockCount = null!;
-    private DataGridView _gridProducts = null!;
-    private TextBox _txtSearchProduct = null!;
-    private DataGridView _gridMovements = null!;
 
     public Form1()
     {
@@ -170,9 +157,9 @@ public partial class Form1 : Form
         AddMenuButton(_sidebarMenu, "Clientes", () => ShowModule("Clientes"));
         AddMenuButton(_sidebarMenu, "Facturas", () => ShowModule("Facturas"));
         AddMenuButton(_sidebarMenu, "Pagos", () => ShowModule("Pagos"));
-        AddMenuButton(_sidebarMenu, "Inventario", () => ShowModule("Inventario"));
         AddMenuButton(_sidebarMenu, "Cartera", () => ShowPendingModule("Cartera"));
         AddMenuButton(_sidebarMenu, "Balance", () => ShowPendingModule("Balance"));
+        AddMenuButton(_sidebarMenu, "Inventario", () => ShowPendingModule("Inventario"));
 
         AddMenuSection("SISTEMA", 18);
         AddMenuButton(_sidebarMenu, "Configuración", OpenDatabaseFolder);
@@ -300,8 +287,6 @@ public partial class Form1 : Form
         _invoicesView = BuildInvoicesListView();
         _paymentsView = BuildPaymentsListView();
         _newPaymentView = BuildNewPaymentView();
-        _inventoryView = BuildInventoryView();
-        _newProductView = BuildNewProductView();
     }
 
     private Panel BuildInvoicesListView()
@@ -557,7 +542,7 @@ public partial class Form1 : Form
             Dock = DockStyle.Fill,
             FlatStyle = FlatStyle.Flat,
             ForeColor = Color.Gray,
-            Font = new Font("Segue UI", 9),
+            Font = new Font("Segoe UI", 9),
             Cursor = Cursors.Hand
         };
         btnClearSearch.FlatAppearance.BorderSize = 0;
@@ -828,8 +813,7 @@ public partial class Form1 : Form
         ConfigureGridStyle(_gridInvoiceItems);
         _gridInvoiceItems.CellContentClick += (sender, e) =>
         {
-            var eliminarColumn = _gridInvoiceItems.Columns["Eliminar"];
-            if (eliminarColumn != null && e.ColumnIndex == eliminarColumn.Index && e.RowIndex >= 0)
+            if (e.ColumnIndex == _gridInvoiceItems.Columns["Eliminar"].Index && e.RowIndex >= 0)
             {
                 if (_gridInvoiceItems.Rows[e.RowIndex].DataBoundItem is InvoiceItemDraft item)
                 {
@@ -932,22 +916,18 @@ public partial class Form1 : Form
 
         // Fila 1: Fecha
         summaryGrid.Controls.Add(new Label { Text = "📅 Fecha de Factura", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        var lblSummaryInvoice = new Label { Text = "-", Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryInvoice, 1, 0);
-
-        summaryGrid.Controls.Add(new Label { Text = "Fecha de Pago:", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
         var lblSummaryDate = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryDate, 1, 1);
+        summaryGrid.Controls.Add(lblSummaryDate, 1, 0);
 
         // Fila 2: Subtotal
-        summaryGrid.Controls.Add(new Label { Text = "Subtotal", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
+        summaryGrid.Controls.Add(new Label { Text = "Subtotal", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
         _lblInvoiceSubtotal = new Label { Text = "$ 0", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(_lblInvoiceSubtotal, 1, 2);
+        summaryGrid.Controls.Add(_lblInvoiceSubtotal, 1, 1);
 
         // Fila 3: IVA
-        summaryGrid.Controls.Add(new Label { Text = "IVA (19%)", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 3);
+        summaryGrid.Controls.Add(new Label { Text = "IVA (19%)", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
         _lblInvoiceIva = new Label { Text = "$ 0", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(_lblInvoiceIva, 1, 3);
+        summaryGrid.Controls.Add(_lblInvoiceIva, 1, 2);
 
         // Fila 4: Total (separado con más altura)
         var totalLblRow = new Label { Text = "Total", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
@@ -1099,28 +1079,6 @@ public partial class Form1 : Form
             return;
         }
 
-        if (moduleName == "Inventario")
-        {
-            _headerTitle.Text = "Inventario";
-            _headerSubtitle.Text = "Gestión de productos y control de stock";
-            _btnHeaderAction.Text = "+ Nuevo Producto";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevoProducto");
-            ShowAnimatedView(_inventoryView, LoadInventory);
-            return;
-        }
-
-        if (moduleName == "NuevoProducto")
-        {
-            _headerTitle.Text = "Nuevo Producto";
-            _headerSubtitle.Text = "Agrega un nuevo producto al catálogo";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Inventario");
-            ShowAnimatedView(_newProductView, () => { });
-            return;
-        }
-
         _headerTitle.Text = "Dashboard";
         _headerSubtitle.Text = "Resumen de facturación y cartera";
         ShowAnimatedView(_dashboardView, () =>
@@ -1185,7 +1143,7 @@ public partial class Form1 : Form
         }
     }
 
-    private static Label CreateCard(TableLayoutPanel cards, int column, String title, out Label secondary)
+    private static Label CreateCard(TableLayoutPanel cards, int column, string title, out Label secondary)
     {
         var card = new RoundedPanel
         {
@@ -2029,7 +1987,7 @@ ORDER BY Faltante DESC;";
         paymentGrid.Controls.Add(_numPaymentAmount, 0, 5);
 
         // Método de Pago
-        paymentGrid.Controls.Add(new Label { Text = "Método de Pago", Font = new Font("Segue UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 6);
+        paymentGrid.Controls.Add(new Label { Text = "Método de Pago", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 6);
         _cmbPaymentMethod = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         paymentGrid.Controls.Add(_cmbPaymentMethod, 0, 7);
 
@@ -2046,11 +2004,11 @@ ORDER BY Faltante DESC;";
             Height = 160
         };
 
-        refNotesGrid.Controls.Add(new Label { Text = "Referencia", Font = new Font("Segue UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
+        refNotesGrid.Controls.Add(new Label { Text = "Referencia", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
         _txtPaymentReference = new TextBox { Dock = DockStyle.Fill, Multiline = false };
         refNotesGrid.Controls.Add(_txtPaymentReference, 0, 1);
 
-        refNotesGrid.Controls.Add(new Label { Text = "Notas", Font = new Font("Segue UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 2);
+        refNotesGrid.Controls.Add(new Label { Text = "Notas", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 2);
         _txtPaymentNotes = new TextBox { Dock = DockStyle.Fill, Multiline = true };
         refNotesGrid.Controls.Add(_txtPaymentNotes, 0, 3);
 
@@ -2110,1779 +2068,230 @@ ORDER BY Faltante DESC;";
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
 
-        summaryGrid.Controls.Add(new Label { Text = "Factura:", Font = new Font("Segue UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        lblSummaryInvoice2 = new Label { Text = "-", Font = new Font("Segue UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryInvoice2, 1, 0);
+        summaryGrid.Controls.Add(new Label { Text = "Factura:", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        var lblSummaryInvoice = new Label { Text = "-", Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
+        summaryGrid.Controls.Add(lblSummaryInvoice, 1, 0);
 
-        summaryGrid.Controls.Add(new Label { Text = "Fecha de Pago:", Font = new Font("Segue UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
-        var lblSummaryDate2 = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryDate2, 1, 1);
+        summaryGrid.Controls.Add(new Label { Text = "Fecha de Pago:", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
+        var lblSummaryDate = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
+        summaryGrid.Controls.Add(lblSummaryDate, 1, 1);
 
-        summaryGrid.Controls.Add(new Label { Text = "Monto", Font = new Font("Segue UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
-        var lblSummaryAmount = new Label { Text = "$ 0", Font = new Font("Segue UI", 14, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryAmount, 1, 2);
+        summaryGrid.Controls.Add(new Label { Text = "Monto a Pagar:", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
+        _lblPaymentTotal = new Label { Text = "$ 0", Font = new Font("Segoe UI", 14, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(11, 52, 22) };
+        summaryGrid.Controls.Add(_lblPaymentTotal, 1, 2);
 
         summaryContentPanel.Controls.Add(summaryGrid);
+
         summaryCard.Controls.Add(summaryContentPanel);
+
+        var btnPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 100,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 12, 0, 0)
+        };
+
+        var btnSave = new Button
+        {
+            Text = "✓ Registrar Pago",
+            Width = 240,
+            Height = 48,
+            BackColor = Color.FromArgb(33, 99, 42),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 12),
+            Cursor = Cursors.Hand
+        };
+        btnSave.FlatAppearance.BorderSize = 0;
+        btnSave.Click += (_, _) => SavePayment();
+        btnPanel.Controls.Add(btnSave);
+
+        var btnClear = new Button
+        {
+            Text = "🔄 Limpiar",
+            Width = 240,
+            Height = 48,
+            BackColor = Color.FromArgb(245, 247, 245),
+            ForeColor = Color.FromArgb(33, 33, 33),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10),
+            Cursor = Cursors.Hand
+        };
+        btnClear.FlatAppearance.BorderSize = 1;
+        btnClear.FlatAppearance.BorderColor = Color.FromArgb(222, 226, 219);
+        btnClear.Click += (_, _) => ClearPaymentForm();
+        btnPanel.Controls.Add(btnClear);
+
+        summaryCard.Controls.Add(btnPanel);
         rightPanel.Controls.Add(summaryCard);
         mainLayout.Controls.Add(rightPanel, 1, 0);
 
         return view;
     }
 
-    private static Label CreateEditorLabel(string text)
+    private void LoadPaymentsList()
     {
-        return new Label
-        {
-            Text = text,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-    }
+        var data = _paymentRepository.GetPaymentHistory();
+        _gridPayments.DataSource = data;
 
-    private void ShowPendingModule(string moduleName)
-    {
-        SetMenuSelection(moduleName);
-        MessageBox.Show($"El módulo {moduleName} se implementará en el siguiente bloque.", "En desarrollo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private static void OpenDatabaseFolder()
-    {
-        var dbPath = AppDatabase.DatabasePath;
-        if (File.Exists(dbPath))
+        if (_gridPayments.Columns.Count > 0)
         {
-            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{dbPath}\"");
-        }
-        else
-        {
-            MessageBox.Show($"No se encontró la base de datos en:\n{dbPath}", "Base de datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _gridPayments.Columns["Id"]!.Visible = false;
+            _gridPayments.Columns["NumeroFactura"]!.HeaderText = "N° Factura";
+            _gridPayments.Columns["Cliente"]!.HeaderText = "Cliente";
+            _gridPayments.Columns["Fecha"]!.HeaderText = "Fecha";
+            _gridPayments.Columns["Valor"]!.HeaderText = "Valor";
+            _gridPayments.Columns["Valor"]!.DefaultCellStyle.Format = "C0";
+            _gridPayments.Columns["MetodoPago"]!.HeaderText = "Método";
+            _gridPayments.Columns["Referencia"]!.HeaderText = "Referencia";
+            _gridPayments.Columns["Notas"]!.HeaderText = "Notas";
         }
     }
 
-    private void ShowModule(string moduleName)
+    private void LoadPaymentModule()
     {
-        SetMenuSelection(moduleName == "NuevaFactura" ? "Facturas" : moduleName);
-        _btnHeaderAction.Visible = false;
-        _headerAction = null;
-
-        if (moduleName == "Clientes")
-        {
-            _headerTitle.Text = "Clientes";
-            _headerSubtitle.Text = "Maestro de clientes con validación anti-duplicado";
-            _btnHeaderAction.Text = "+ Nuevo Cliente";
-            _btnHeaderAction.Visible = true;
-            _headerAction = OpenNewCustomerDialog;
-            ShowAnimatedView(_customersView, () => LoadCustomers(_txtSearchCustomer.Text));
-            return;
-        }
-
-        if (moduleName == "Facturas")
-        {
-            _headerTitle.Text = "Facturas";
-            _headerSubtitle.Text = "Gestiona tus facturas y remisiones";
-            _btnHeaderAction.Text = "+ Nueva Factura";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevaFactura");
-            ShowAnimatedView(_invoicesView, LoadInvoicesList);
-            return;
-        }
-
-        if (moduleName == "NuevaFactura")
-        {
-            _headerTitle.Text = "Nueva Factura";
-            _headerSubtitle.Text = "Crea una nueva factura o remisión";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Facturas");
-            ShowAnimatedView(_newInvoiceView, LoadInvoiceModule);
-            return;
-        }
-
-        if (moduleName == "Pagos")
-        {
-            _headerTitle.Text = "Pagos";
-            _headerSubtitle.Text = "Gestiona pagos de facturas";
-            _btnHeaderAction.Text = "+ Nuevo Pago";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevoPago");
-            ShowAnimatedView(_paymentsView, LoadPaymentsList);
-            return;
-        }
-
-        if (moduleName == "NuevoPago")
-        {
-            _headerTitle.Text = "Nuevo Pago";
-            _headerSubtitle.Text = "Registra un nuevo pago para una factura";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Pagos");
-            ShowAnimatedView(_newPaymentView, LoadPaymentModule);
-            return;
-        }
-
-        if (moduleName == "Inventario")
-        {
-            _headerTitle.Text = "Inventario";
-            _headerSubtitle.Text = "Gestión de productos y control de stock";
-            _btnHeaderAction.Text = "+ Nuevo Producto";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevoProducto");
-            ShowAnimatedView(_inventoryView, LoadInventory);
-            return;
-        }
-
-        if (moduleName == "NuevoProducto")
-        {
-            _headerTitle.Text = "Nuevo Producto";
-            _headerSubtitle.Text = "Agrega un nuevo producto al catálogo";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Inventario");
-            ShowAnimatedView(_newProductView, () => { });
-            return;
-        }
-
-        _headerTitle.Text = "Dashboard";
-        _headerSubtitle.Text = "Resumen de facturación y cartera";
-        ShowAnimatedView(_dashboardView, () =>
-        {
-            LoadDashboard();
-            LoadRecentInvoices();
-            LoadLowStock();
-        });
-    }
-
-    private void ShowAnimatedView(Panel targetView, Action loadAction)
-    {
-        _moduleAnimationTimer?.Stop();
-        _moduleAnimationTimer?.Dispose();
-        _moduleAnimationTimer = null;
-
-        _contentHost.Controls.Clear();
-        var hostSize = _contentHost.ClientSize;
-        if (hostSize.Width <= 0 || hostSize.Height <= 0)
-        {
-            targetView.Dock = DockStyle.Fill;
-            _contentHost.Controls.Add(targetView);
-            loadAction();
-            return;
-        }
-
-        targetView.Dock = DockStyle.None;
-        targetView.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        targetView.Bounds = new Rectangle(hostSize.Width, 0, hostSize.Width, hostSize.Height);
-        _contentHost.Controls.Add(targetView);
-        loadAction();
-
-        _moduleAnimationTimer = new System.Windows.Forms.Timer { Interval = 12 };
-        _moduleAnimationTimer.Tick += (_, _) =>
-        {
-            var step = Math.Max(24, targetView.Left / 5);
-            var next = targetView.Left - step;
-            if (next <= 0)
-            {
-                targetView.Left = 0;
-                _moduleAnimationTimer?.Stop();
-                _moduleAnimationTimer?.Dispose();
-                _moduleAnimationTimer = null;
-
-                targetView.Anchor = AnchorStyles.None;
-                targetView.Dock = DockStyle.Fill;
-                return;
-            }
-
-            targetView.Left = next;
-        };
-        _moduleAnimationTimer.Start();
-    }
-
-    private void SetMenuSelection(string selected)
-    {
-        foreach (var item in _menuButtons)
-        {
-            item.Value.BackColor = item.Key == selected
-                ? Color.FromArgb(44, 98, 52)
-                : Color.FromArgb(18, 57, 26);
-        }
-    }
-
-    private static Label CreateCard(TableLayoutPanel cards, int column, String title, out Label secondary)
-    {
-        var card = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(8),
-            BackColor = Color.White,
-            Padding = new Padding(16),
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14
-        };
-
-        var titleLabel = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Height = 26
-        };
-
-        var valueLabel = new Label
-        {
-            Text = "$ 0",
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 19, FontStyle.Bold),
-            ForeColor = Color.FromArgb(11, 52, 22),
-            Height = 50
-        };
-
-        secondary = new Label
-        {
-            Text = string.Empty,
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 9, FontStyle.Regular),
-            ForeColor = Color.DimGray,
-            Height = 20
-        };
-
-        var accent = new Panel
-        {
-            Size = new Size(56, 56),
-            BackColor = Color.FromArgb(240, 247, 240),
-            Location = new Point(card.Width - 62, 0),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-
-        card.Controls.Add(accent);
-        card.Controls.Add(secondary);
-        card.Controls.Add(valueLabel);
-        card.Controls.Add(titleLabel);
-        cards.Controls.Add(card, column, 0);
-        return valueLabel;
-    }
-
-    private static Panel CreateDataPanel(string title, out DataGridView grid)
-    {
-        var panel = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White,
-            Padding = new Padding(12),
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14
-        };
-
-        var label = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Height = 32,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold)
-        };
-
-        grid = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.None,
-            RowHeadersVisible = false
-        };
-
-        panel.Controls.Add(grid);
-        panel.Controls.Add(label);
-        return panel;
-    }
-
-    private static void ConfigureGridStyle(DataGridView grid)
-    {
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.None;
-        grid.GridColor = Color.FromArgb(229, 229, 229);
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(224, 239, 224);
-        grid.DefaultCellStyle.SelectionForeColor = Color.Black;
-        grid.EnableHeadersVisualStyles = false;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(245, 247, 245);
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(245, 247, 245);
-        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-        grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(2, 6, 2, 6);
-        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
-        grid.ColumnHeadersHeight = 50;
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-    }
-
-    private void LoadDashboard()
-    {
-        var snapshot = _dashboardService.GetSnapshot();
-        _lblTotalFacturado.Text = snapshot.TotalFacturado.ToString("C0");
-        _lblSaldoPendiente.Text = snapshot.SaldoPendiente.ToString("C0");
-        _lblTotalPagos.Text = snapshot.TotalPagos.ToString("C0");
-        _lblClientesActivos.Text = snapshot.ClientesActivos.ToString("N0");
-        _lblPendingCount.Text = $"{snapshot.FacturasPendientes} facturas pendientes";
-        _lblPaymentsCount.Text = $"{snapshot.PagosRegistrados} pagos registrados";
-    }
-
-    private void LoadCustomers(string? search)
-    {
-        var data = _customerRepository.GetGridRows(search);
-        _gridCustomers.DataSource = data;
-
-        var idColumn = _gridCustomers.Columns["Id"];
-        if (idColumn != null)
-        {
-            idColumn.Visible = false;
-        }
-
-        _gridCustomers.Columns["Cliente"]!.HeaderText = "Cliente";
-        _gridCustomers.Columns["NitCedula"]!.HeaderText = "NIT / Cédula";
-        _gridCustomers.Columns["Contacto"]!.HeaderText = "Contacto";
-        _gridCustomers.Columns["Balance"]!.HeaderText = "Balance";
-        _gridCustomers.Columns["NumeroFacturas"]!.HeaderText = "Facturas";
-        _gridCustomers.Columns["Balance"]!.DefaultCellStyle.Format = "C0";
-        _gridCustomers.Columns["Cliente"]!.MinimumWidth = 220;
-        _gridCustomers.Columns["NitCedula"]!.MinimumWidth = 140;
-        _gridCustomers.Columns["Contacto"]!.MinimumWidth = 230;
-        _gridCustomers.Columns["Balance"]!.MinimumWidth = 130;
-        _gridCustomers.Columns["NumeroFacturas"]!.MinimumWidth = 90;
-
-        EnsureCustomerActionColumns();
-    }
-
-    private void EnsureCustomerActionColumns()
-    {
-        if (_gridCustomers.Columns.Contains("AccionVer"))
-        {
-            return;
-        }
-
-        _gridCustomers.Columns.Add(new DataGridViewButtonColumn
-        {
-            Name = "AccionVer",
-            HeaderText = "Acciones",
-            Text = "Ver",
-            UseColumnTextForButtonValue = true,
-            Width = 86,
-            FlatStyle = FlatStyle.Flat,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-
-        _gridCustomers.Columns.Add(new DataGridViewButtonColumn
-        {
-            Name = "AccionEditar",
-            HeaderText = "",
-            Text = "Editar",
-            UseColumnTextForButtonValue = true,
-            Width = 86,
-            FlatStyle = FlatStyle.Flat,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-
-        _gridCustomers.Columns.Add(new DataGridViewButtonColumn
-        {
-            Name = "AccionEliminar",
-            HeaderText = "",
-            Text = "Eliminar",
-            UseColumnTextForButtonValue = true,
-            Width = 92,
-            FlatStyle = FlatStyle.Flat,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-    }
-
-    private void OnCustomerGridCellContentClick(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (e.RowIndex < 0)
-        {
-            return;
-        }
-
-        var column = _gridCustomers.Columns[e.ColumnIndex].Name;
-        switch (column)
-        {
-            case "AccionVer":
-                ViewSelectedCustomer();
-                break;
-            case "AccionEditar":
-                EditSelectedCustomer();
-                break;
-            case "AccionEliminar":
-                DeleteSelectedCustomer();
-                break;
-        }
-    }
-
-    private void OpenNewCustomerDialog()
-    {
-        var draft = new CustomerDto
-        {
-            Codigo = _customerRepository.GenerateNextCode(),
-            TipoIva = "GRAVADO",
-            Activo = true
-        };
-
-        using var dialog = new CustomerEditorDialog(draft);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null)
-        {
-            return;
-        }
-
-        UpsertCustomer(dialog.Result);
-    }
-
-    private void EditSelectedCustomer()
-    {
-        if (_gridCustomers.CurrentRow?.DataBoundItem is not CustomerGridRowDto row)
-        {
-            return;
-        }
-
-        var selected = _customerRepository.GetById(row.Id);
-        if (selected is null)
-        {
-            return;
-        }
-
-        using var dialog = new CustomerEditorDialog(selected);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null)
-        {
-            return;
-        }
-
-        UpsertCustomer(dialog.Result);
-    }
-
-    private void ViewSelectedCustomer()
-    {
-        if (_gridCustomers.CurrentRow?.DataBoundItem is not CustomerGridRowDto row)
-        {
-            return;
-        }
-
-        MessageBox.Show($"Cliente: {row.Cliente}\nNIT/Cédula: {row.NitCedula}\nContacto: {row.Contacto}\nBalance: {row.Balance:C0}\nFacturas: {row.NumeroFacturas}",
-            "Detalle de cliente", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private void DeleteSelectedCustomer()
-    {
-        if (_gridCustomers.CurrentRow?.DataBoundItem is not CustomerGridRowDto row)
-        {
-            return;
-        }
-
-        var confirm = MessageBox.Show($"¿Deseas eliminar el cliente {row.Cliente}?", "Eliminar cliente", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-        if (confirm != DialogResult.Yes)
-        {
-            return;
-        }
-
-        var changed = _customerRepository.DeleteOrDeactivate(row.Id);
-        if (!changed)
-        {
-            MessageBox.Show("No se pudo eliminar el cliente en la base de datos.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        LoadCustomers(_txtSearchCustomer.Text);
-        LoadDashboard();
-        MessageBox.Show("Cliente eliminado correctamente.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private void UpsertCustomer(CustomerDto customer)
-    {
-        if (string.IsNullOrWhiteSpace(customer.Codigo))
-        {
-            customer = new CustomerDto
-            {
-                Id = customer.Id,
-                Codigo = _customerRepository.GenerateNextCode(),
-                Nombre = customer.Nombre,
-                Nit = customer.Nit,
-                Direccion = customer.Direccion,
-                Telefono = customer.Telefono,
-                Email = customer.Email,
-                TipoIva = customer.TipoIva,
-                Activo = customer.Activo
-            };
-        }
-
-        long? excludeId = customer.Id > 0 ? customer.Id : null;
-        if (_customerRepository.ExistsDuplicate(customer.Codigo, customer.Nit, excludeId))
-        {
-            MessageBox.Show("Ya existe un cliente con el mismo código o NIT.", "Validación", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        if (customer.Id > 0)
-        {
-            _customerRepository.Update(customer);
-            MessageBox.Show("Cliente actualizado.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        else
-        {
-            _customerRepository.Insert(customer);
-            MessageBox.Show("Cliente creado.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        LoadCustomers(_txtSearchCustomer.Text);
-        LoadDashboard();
-    }
-
-    private void LoadInvoiceModule()
-    {
-        var customers = _invoiceRepository.GetActiveCustomers();
-        _cmbInvoiceCustomer.DataSource = customers;
-        _cmbInvoiceCustomer.DisplayMember = nameof(InvoiceCustomerLookupDto.DisplayName);
-        _cmbInvoiceCustomer.ValueMember = nameof(InvoiceCustomerLookupDto.Id);
+        var pendingInvoices = _paymentRepository.GetPendingInvoices();
+        _cmbPaymentInvoice.DataSource = pendingInvoices;
+        _cmbPaymentInvoice.DisplayMember = nameof(PaymentLookupDto.DisplayName);
+        _cmbPaymentInvoice.ValueMember = nameof(PaymentLookupDto.Id);
 
         var paymentMethods = _invoiceRepository.GetPaymentMethods();
-        _cmbInvoicePaymentMethod.DataSource = paymentMethods;
-        _cmbInvoicePaymentMethod.DisplayMember = nameof(PaymentMethodLookupDto.Nombre);
-        _cmbInvoicePaymentMethod.ValueMember = nameof(PaymentMethodLookupDto.Id);
+        _cmbPaymentMethod.DataSource = paymentMethods;
+        _cmbPaymentMethod.DisplayMember = nameof(PaymentMethodLookupDto.Nombre);
+        _cmbPaymentMethod.ValueMember = nameof(PaymentMethodLookupDto.Id);
 
-        var products = _invoiceRepository.GetProducts();
-        
-        if (products.Count == 0)
-        {
-            MessageBox.Show("No hay productos registrados en la base de datos. Por favor, verifica la inicialización.", "Sin Productos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        
-        _cmbItemProduct.DataSource = products;
-        _cmbItemProduct.DisplayMember = nameof(ProductLookupDto.DisplayName);
-        _cmbItemProduct.ValueMember = nameof(ProductLookupDto.Id);
-
-        _currentIvaRate = _invoiceRepository.GetIvaRate();
-        LoadInvoicesList();
-        ClearInvoiceForm();
+        _dtpPaymentDate.Value = DateTime.Today;
+        ClearPaymentForm();
     }
 
-    private void LoadInvoicesList()
+    private void OnInvoiceSelected()
     {
-        _gridInvoices.DataSource = _invoiceRepository.GetRecentInvoices();
-        var idColumn = _gridInvoices.Columns["Id"];
-        if (idColumn != null)
+        if (_cmbPaymentInvoice.SelectedItem is not PaymentLookupDto invoice)
         {
-            idColumn.Visible = false;
-        }
-
-        _gridInvoices.Columns["Numero"]!.HeaderText = "N° Factura";
-        _gridInvoices.Columns["Fecha"]!.HeaderText = "Fecha";
-        _gridInvoices.Columns["Cliente"]!.HeaderText = "Cliente";
-        _gridInvoices.Columns["Total"]!.DefaultCellStyle.Format = "C0";
-        _gridInvoices.Columns["Saldo"]!.DefaultCellStyle.Format = "C0";
-    }
-
-    private void OnProductChanged()
-    {
-        if (_cmbItemProduct.SelectedItem is not ProductLookupDto product)
-        {
-            _lblItemStock.Text = "Stock: -";
+            _lblPaymentBalance.Text = "$ 0";
+            _numPaymentAmount.Value = 0;
             return;
         }
 
-        _txtItemDescription.Text = product.Nombre;
-        _numItemPrice.Value = Math.Min(_numItemPrice.Maximum, product.PrecioBase);
-        _lblItemStock.Text = $"Stock: {product.StockActual:N0}";
+        _lblPaymentBalance.Text = $"$ {invoice.Saldo:N0}";
+        _numPaymentAmount.Value = Math.Min(_numPaymentAmount.Maximum, invoice.Saldo);
+        _lblPaymentTotal.Text = $"$ {_numPaymentAmount.Value:N0}";
     }
 
-    private void AddInvoiceItem()
+    private void SavePayment()
     {
-        if (_cmbItemProduct.SelectedItem is not ProductLookupDto product)
+        if (_cmbPaymentInvoice.SelectedItem is not PaymentLookupDto invoice)
         {
-            MessageBox.Show("Selecciona un producto.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Selecciona una factura.", "Pagos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        var quantity = _numItemQuantity.Value;
-        if (quantity <= 0)
+        var amount = _numPaymentAmount.Value;
+        if (amount <= 0)
         {
-            MessageBox.Show("La cantidad debe ser mayor a cero.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("El monto debe ser mayor a cero.", "Pagos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        if (quantity > product.StockActual)
+        if (amount > invoice.Saldo)
         {
-            MessageBox.Show("La cantidad supera el stock disponible.", "Inventario", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("El monto supera el saldo pendiente.", "Pagos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        var price = _numItemPrice.Value;
-        var total = Math.Round(quantity * price, 0);
+        var methodId = _cmbPaymentMethod.SelectedValue is long methodValue ? methodValue : (Convert.ToInt64(_cmbPaymentMethod.SelectedValue));
 
-        // Verificar si el producto ya existe en los ítems
-        var existingItem = _invoiceItems.FirstOrDefault(x => x.ProductId == product.Id);
-        if (existingItem != null)
+        var request = new PaymentCreateRequest
         {
-            existingItem.Cantidad += quantity;
-            existingItem.TotalLinea = Math.Round(existingItem.Cantidad * existingItem.PrecioUnitario, 0);
-        }
-        else
-        {
-            _invoiceItems.Add(new InvoiceItemDraft
-            {
-                ProductId = product.Id,
-                Codigo = product.Codigo,
-                Descripcion = string.IsNullOrWhiteSpace(_txtItemDescription.Text) ? product.Nombre : _txtItemDescription.Text.Trim(),
-                Cantidad = quantity,
-                PrecioUnitario = price,
-                AplicaIva = _chkItemIva.Checked,
-                TotalLinea = total
-            });
-        }
-
-        // Limpiar formulario para agregar más items
-        _numItemQuantity.Value = 1;
-        _txtItemDescription.Clear();
-        if (_cmbItemProduct.Items.Count > 0)
-        {
-            _cmbItemProduct.SelectedIndex = 0;
-        }
-        
-        RecalculateInvoiceTotals();
-        _gridInvoiceItems.Refresh();
-    }
-
-    private void RemoveInvoiceItem()
-    {
-        if (_gridInvoiceItems.CurrentRow?.DataBoundItem is InvoiceItemDraft item)
-        {
-            _invoiceItems.Remove(item);
-            RecalculateInvoiceTotals();
-        }
-    }
-
-    private (decimal subtotal, decimal iva, decimal total) ComputeInvoiceTotals()
-    {
-        foreach (var item in _invoiceItems)
-        {
-            item.TotalLinea = Math.Round(item.Cantidad * item.PrecioUnitario, 0);
-        }
-
-        var subtotal = _invoiceItems.Sum(x => x.TotalLinea);
-        var ivaBase = _invoiceItems.Where(x => x.AplicaIva).Sum(x => x.TotalLinea);
-        var iva = Math.Round(ivaBase * _currentIvaRate, 0);
-        var total = subtotal + iva;
-        return (subtotal, iva, total);
-    }
-
-    private void RecalculateInvoiceTotals()
-    {
-        var totals = ComputeInvoiceTotals();
-        _lblInvoiceSubtotal.Text = $"$ {totals.subtotal:N0}";
-        _lblInvoiceIva.Text = $"$ {totals.iva:N0}";
-        _lblInvoiceTotal.Text = $"$ {totals.total:N0}";
-        _gridInvoiceItems.Refresh();
-        ConfigureInvoiceItemsColumns();
-    }
-
-    private void ConfigureInvoiceItemsColumns()
-    {
-        if (_gridInvoiceItems.Columns.Count == 0)
-        {
-            return;
-        }
-
-        if (_gridInvoiceItems.Columns["ProductId"] != null)
-        {
-            _gridInvoiceItems.Columns["ProductId"]!.Visible = false;
-        }
-
-        _gridInvoiceItems.Columns["Codigo"]!.HeaderText = "Código";
-        _gridInvoiceItems.Columns["Codigo"]!.ReadOnly = true;
-        _gridInvoiceItems.Columns["Codigo"]!.Width = 100;
-
-        _gridInvoiceItems.Columns["Descripcion"]!.HeaderText = "Descripción";
-        _gridInvoiceItems.Columns["Descripcion"]!.ReadOnly = true;
-        _gridInvoiceItems.Columns["Descripcion"]!.Width = 180;
-
-        _gridInvoiceItems.Columns["Cantidad"]!.HeaderText = "Cantidad";
-        _gridInvoiceItems.Columns["Cantidad"]!.ReadOnly = false;
-        _gridInvoiceItems.Columns["Cantidad"]!.Width = 100;
-        _gridInvoiceItems.Columns["Cantidad"]!.DefaultCellStyle.Format = "N0";
-
-        _gridInvoiceItems.Columns["PrecioUnitario"]!.HeaderText = "Precio Unit.";
-        _gridInvoiceItems.Columns["PrecioUnitario"]!.ReadOnly = false;
-        _gridInvoiceItems.Columns["PrecioUnitario"]!.Width = 110;
-        _gridInvoiceItems.Columns["PrecioUnitario"]!.DefaultCellStyle.Format = "C0";
-
-        _gridInvoiceItems.Columns["AplicaIva"]!.HeaderText = "¿IVA?";
-        _gridInvoiceItems.Columns["AplicaIva"]!.ReadOnly = false;
-        _gridInvoiceItems.Columns["AplicaIva"]!.Width = 60;
-
-        _gridInvoiceItems.Columns["TotalLinea"]!.HeaderText = "Total";
-        _gridInvoiceItems.Columns["TotalLinea"]!.ReadOnly = true;
-        _gridInvoiceItems.Columns["TotalLinea"]!.Width = 100;
-        _gridInvoiceItems.Columns["TotalLinea"]!.DefaultCellStyle.Format = "C0";
-    }
-
-    private void SaveInvoice()
-    {
-        if (_cmbInvoiceCustomer.SelectedItem is not InvoiceCustomerLookupDto customer)
-        {
-            MessageBox.Show("Debes seleccionar un cliente activo.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        if (_invoiceItems.Count == 0)
-        {
-            MessageBox.Show("Agrega al menos un ítem a la factura.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var invoiceNumber = _invoiceRepository.GenerateNextInvoiceNumber();
-
-        var totals = ComputeInvoiceTotals();
-        if (totals.total < 0)
-        {
-            MessageBox.Show("El total no puede ser negativo.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var methodId = _cmbInvoicePaymentMethod.SelectedValue is long methodValue
-            ? methodValue
-            : Convert.ToInt64(_cmbInvoicePaymentMethod.SelectedValue);
-
-        var request = new InvoiceCreateRequest
-        {
-            Numero = invoiceNumber,
-            Fecha = _dtpInvoiceDate.Value.Date,
-            ClienteId = customer.Id,
+            FacturaId = invoice.Id,
+            Fecha = _dtpPaymentDate.Value.Date,
+            Valor = amount,
             MetodoPagoId = methodId,
-            Estado = "Enviada",
-            Subtotal = totals.subtotal,
-            IvaPorcentaje = _currentIvaRate,
-            IvaValor = totals.iva,
-            Retencion = 0,
-            Total = totals.total,
-            Saldo = totals.total,
-            Notas = _txtInvoiceNotes.Text,
-            Items = _invoiceItems.Select(x => new InvoiceItemInput
-            {
-                ProductId = x.ProductId,
-                Descripcion = x.Descripcion,
-                Cantidad = x.Cantidad,
-                PrecioUnitario = x.PrecioUnitario,
-                AplicaIva = x.AplicaIva,
-                TotalLinea = x.TotalLinea
-            }).ToList()
+            Referencia = _txtPaymentReference.Text,
+            Notas = _txtPaymentNotes.Text
         };
 
         try
         {
-            _invoiceRepository.CreateInvoice(request);
-            MessageBox.Show("Factura emitida correctamente.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            LoadInvoicesList();
-            ClearInvoiceForm();
+            _paymentRepository.CreatePayment(request);
+            MessageBox.Show("Pago registrado correctamente.", "Pagos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LoadPaymentsList();
+            ClearPaymentForm();
             LoadDashboard();
-            LoadRecentInvoices();
-            LoadLowStock();
-            ShowModule("Facturas");
+            ShowModule("Pagos");
         }
         catch (InvalidOperationException ex)
         {
-            MessageBox.Show(ex.Message, "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(ex.Message, "Pagos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
-    private void ClearInvoiceForm()
+    private void ClearPaymentForm()
     {
-        _dtpInvoiceDate.Value = DateTime.Today;
-        _txtInvoiceNotes.Clear();
-        _invoiceItems.Clear();
-
-        if (_cmbInvoiceCustomer.Items.Count > 0)
-        {
-            _cmbInvoiceCustomer.SelectedIndex = 0;
-        }
-
-        if (_cmbInvoicePaymentMethod.Items.Count > 0)
-        {
-            _cmbInvoicePaymentMethod.SelectedIndex = 0;
-        }
-
-        if (_cmbItemProduct.Items.Count > 0)
-        {
-            _cmbItemProduct.SelectedIndex = 0;
-        }
-
-        _numItemQuantity.Value = 1;
-        _chkItemIva.Checked = true;
-        RecalculateInvoiceTotals();
-    }
-
-    private void LoadRecentInvoices()
-    {
-        const string sql = @"
-SELECT f.Numero,
-       f.Fecha,
-       c.Nombre AS Cliente,
-       f.Total,
-       f.Saldo,
-       f.Estado
-FROM Factura f
-INNER JOIN Cliente c ON c.Id = f.ClienteId
-ORDER BY date(f.Fecha) DESC, f.Id DESC
-LIMIT 12;";
-
-        _gridRecentInvoices.DataSource = ExecuteQuery(sql);
-        ConfigureGridStyle(_gridRecentInvoices);
-    }
-
-    private void LoadLowStock()
-    {
-        const string sql = @"
-SELECT Codigo,
-       Nombre,
-       StockActual,
-       StockMinimo,
-       (StockMinimo - StockActual) AS Faltante
-FROM ProductoExt
-WHERE StockActual <= StockMinimo
-ORDER BY Faltante DESC;";
-
-        _gridLowStock.DataSource = ExecuteQuery(sql);
-        ConfigureGridStyle(_gridLowStock);
-    }
-
-    private static DataTable ExecuteQuery(string sql)
-    {
-        using var connection = AppDatabase.CreateConnection();
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        using var reader = command.ExecuteReader();
-        var table = new DataTable();
-        table.Load(reader);
-        return table;
-    }
-
-    private static Control CreateDashboardBars()
-    {
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 36, 16, 24) };
-        var barA = new Panel { Width = 58, Height = 120, BackColor = Color.FromArgb(231, 168, 57), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Location = new Point(panel.Width - 170, panel.Height - 150) };
-        var barB = new Panel { Width = 58, Height = 210, BackColor = Color.FromArgb(62, 146, 137), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Location = new Point(panel.Width - 105, panel.Height - 240) };
-        var axis = new Label { Text = "Oct    Nov    Dic    Ene    Feb    Mar", Dock = DockStyle.Bottom, Height = 24, ForeColor = Color.Gray };
-        panel.Controls.Add(barA);
-        panel.Controls.Add(barB);
-        panel.Controls.Add(axis);
-        return panel;
-    }
-
-    private static Control CreateStatusLegend()
-    {
-        var panel = new Panel { Dock = DockStyle.Fill };
-        var circle = new Label
-        {
-            Text = "◉",
-            ForeColor = Color.FromArgb(39, 106, 22),
-            Font = new Font("Segoe UI", 70, FontStyle.Bold),
-            AutoSize = true,
-            Location = new Point(70, 60)
-        };
-        var legend = new Label
-        {
-            Text = "● Pagadas   ● Enviadas",
-            ForeColor = Color.FromArgb(95, 95, 95),
-            Dock = DockStyle.Bottom,
-            Height = 34,
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        panel.Controls.Add(circle);
-        panel.Controls.Add(legend);
-        return panel;
-    }
-
-    private Panel BuildPaymentsListView()
-    {
-        var view = new Panel { Dock = DockStyle.Fill };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 72, 0, 0)
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        view.Controls.Add(layout);
-
-        var filterCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White,
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14,
-            Padding = new Padding(14)
-        };
-
-        var filterRow = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
+        _numPaymentAmount.Value = 0;
+        _txtPaymentReference.Clear();
+        _txtPaymentNotes.Clear();
+        _dtpPaymentDate.Value = DateTime.Today;
         
-        var lblFilter = new Label
+        if (_cmbPaymentInvoice.Items.Count > 0)
         {
-            Text = "Historial de Pagos",
-            Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-        filterRow.Controls.Add(lblFilter, 0, 0);
-        filterCard.Controls.Add(filterRow);
+            _cmbPaymentInvoice.SelectedIndex = 0;
+        }
 
-        var tableCard = new RoundedPanel
+        if (_cmbPaymentMethod.Items.Count > 0)
         {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White,
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14,
-            Padding = new Padding(12)
-        };
+            _cmbPaymentMethod.SelectedIndex = 0;
+        }
 
-        _gridPayments = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.None,
-            RowHeadersVisible = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            MultiSelect = false
-        };
-        ConfigureGridStyle(_gridPayments);
-        tableCard.Controls.Add(_gridPayments);
-
-        layout.Controls.Add(filterCard, 0, 0);
-        layout.Controls.Add(tableCard, 0, 1);
-        return view;
+        _lblPaymentBalance.Text = "$ 0";
+        _lblPaymentTotal.Text = "$ 0";
     }
 
-    private Panel BuildNewPaymentView()
+    private sealed class InvoiceItemDraft
     {
-        var view = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(0, 72, 0, 0),
-            AutoScroll = true
-        };
-
-        var mainLayout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
-        mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-        view.Controls.Add(mainLayout);
-
-        // Columna izquierda
-        var leftLayout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 1,
-            Margin = new Padding(12, 12, 6, 12),
-            Padding = Padding.Empty
-        };
-
-        var paymentCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White,
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14,
-            Padding = new Padding(16),
-            Margin = new Padding(0, 0, 0, 12)
-        };
-
-        var paymentTitle = new Label
-        {
-            Text = "📝 Información del Pago",
-            Dock = DockStyle.Top,
-            Height = 28,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold),
-            ForeColor = Color.FromArgb(33, 33, 33)
-        };
-        paymentCard.Controls.Add(paymentTitle);
-
-        var paymentGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            ColumnCount = 1,
-            RowCount = 7,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 12, 0, 0),
-            Height = 360
-        };
-        paymentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        // Factura
-        paymentGrid.Controls.Add(new Label { Text = "Factura *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
-        _cmbPaymentInvoice = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        _cmbPaymentInvoice.SelectedIndexChanged += (_, _) => OnInvoiceSelected();
-        paymentGrid.Controls.Add(_cmbPaymentInvoice, 0, 1);
-
-        // Fecha
-        paymentGrid.Controls.Add(new Label { Text = "Fecha *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 2);
-        _dtpPaymentDate = new DateTimePicker { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short };
-        paymentGrid.Controls.Add(_dtpPaymentDate, 0, 3);
-
-        // Monto
-        paymentGrid.Controls.Add(new Label { Text = "Monto *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 4);
-        _numPaymentAmount = new NumericUpDown { Dock = DockStyle.Fill, DecimalPlaces = 0, Maximum = 999999999, ThousandsSeparator = true };
-        paymentGrid.Controls.Add(_numPaymentAmount, 0, 5);
-
-        // Método de Pago
-        paymentGrid.Controls.Add(new Label { Text = "Método de Pago", Font = new Font("Segue UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 6);
-        _cmbPaymentMethod = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        paymentGrid.Controls.Add(_cmbPaymentMethod, 0, 7);
-
-        paymentCard.Controls.Add(paymentGrid);
-
-        // Referencia y Notas
-        var refNotesGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            ColumnCount = 1,
-            RowCount = 4,
-            Margin = new Padding(0, 12, 0, 0),
-            Padding = Padding.Empty,
-            Height = 160
-        };
-
-        refNotesGrid.Controls.Add(new Label { Text = "Referencia", Font = new Font("Segue UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
-        _txtPaymentReference = new TextBox { Dock = DockStyle.Fill, Multiline = false };
-        refNotesGrid.Controls.Add(_txtPaymentReference, 0, 1);
-
-        refNotesGrid.Controls.Add(new Label { Text = "Notas", Font = new Font("Segue UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 2);
-        _txtPaymentNotes = new TextBox { Dock = DockStyle.Fill, Multiline = true };
-        refNotesGrid.Controls.Add(_txtPaymentNotes, 0, 3);
-
-        paymentCard.Controls.Add(refNotesGrid);
-        leftLayout.Controls.Add(paymentCard, 0, 0);
-        mainLayout.Controls.Add(leftLayout, 0, 0);
-
-        // Columna derecha: Resumen
-        var rightPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(6, 12, 12, 12),
-            Padding = Padding.Empty,
-            AutoScroll = true
-        };
-
-        var summaryCard = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White,
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14,
-            Padding = new Padding(20)
-        };
-
-        var summaryTitle = new Label
-        {
-            Text = "Resumen",
-            Dock = DockStyle.Top,
-            Height = 40,
-            Font = new Font("Segoe UI", 14, FontStyle.Bold),
-            ForeColor = Color.FromArgb(33, 33, 33),
-            Margin = new Padding(0, 0, 0, 16)
-        };
-        summaryCard.Controls.Add(summaryTitle);
-
-        // Panel con scroll para el contenido del resumen
-        var summaryContentPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            Padding = new Padding(0, 20, 0, 0)
-        };
-
-        var summaryGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            ColumnCount = 2,
-            RowCount = 3,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
-            Height = 150
-        };
-        summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-
-        summaryGrid.Controls.Add(new Label { Text = "Factura:", Font = new Font("Segue UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        lblSummaryInvoice2 = new Label { Text = "-", Font = new Font("Segue UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryInvoice2, 1, 0);
-
-        summaryGrid.Controls.Add(new Label { Text = "Fecha de Pago:", Font = new Font("Segue UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
-        var lblSummaryDate2 = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryDate2, 1, 1);
-
-        summaryGrid.Controls.Add(new Label { Text = "Monto", Font = new Font("Segue UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
-        var lblSummaryAmount = new Label { Text = "$ 0", Font = new Font("Segue UI", 14, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryAmount, 1, 2);
-
-        summaryContentPanel.Controls.Add(summaryGrid);
-        summaryCard.Controls.Add(summaryContentPanel);
-        rightPanel.Controls.Add(summaryCard);
-        mainLayout.Controls.Add(rightPanel, 1, 0);
-
-        return view;
+        public long ProductId { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+        public decimal PrecioUnitario { get; set; }
+        public bool AplicaIva { get; set; }
+        public decimal TotalLinea { get; set; }
     }
 
-    private static Label CreateEditorLabel(string text)
+    private sealed class RoundedPanel : Panel
     {
-        return new Label
-        {
-            Text = text,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-    }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public int Radius { get; set; } = 12;
 
-    private void ShowPendingModule(string moduleName)
-    {
-        SetMenuSelection(moduleName);
-        MessageBox.Show($"El módulo {moduleName} se implementará en el siguiente bloque.", "En desarrollo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Color BorderColor { get; set; } = Color.LightGray;
 
-    private static void OpenDatabaseFolder()
-    {
-        var dbPath = AppDatabase.DatabasePath;
-        if (File.Exists(dbPath))
+        protected override void OnPaint(PaintEventArgs e)
         {
-            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{dbPath}\"");
-        }
-        else
-        {
-            MessageBox.Show($"No se encontró la base de datos en:\n{dbPath}", "Base de datos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-    private void ShowModule(string moduleName)
-    {
-        SetMenuSelection(moduleName == "NuevaFactura" ? "Facturas" : moduleName);
-        _btnHeaderAction.Visible = false;
-        _headerAction = null;
-
-        if (moduleName == "Clientes")
-        {
-            _headerTitle.Text = "Clientes";
-            _headerSubtitle.Text = "Maestro de clientes con validación anti-duplicado";
-            _btnHeaderAction.Text = "+ Nuevo Cliente";
-            _btnHeaderAction.Visible = true;
-            _headerAction = OpenNewCustomerDialog;
-            ShowAnimatedView(_customersView, () => LoadCustomers(_txtSearchCustomer.Text));
-            return;
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = CreateRoundedPath(rect, Radius);
+            using var pen = new Pen(BorderColor, 1);
+            e.Graphics.DrawPath(pen, path);
+            Region = new Region(path);
         }
 
-        if (moduleName == "Facturas")
+        private static GraphicsPath CreateRoundedPath(Rectangle rect, int radius)
         {
-            _headerTitle.Text = "Facturas";
-            _headerSubtitle.Text = "Gestiona tus facturas y remisiones";
-            _btnHeaderAction.Text = "+ Nueva Factura";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevaFactura");
-            ShowAnimatedView(_invoicesView, LoadInvoicesList);
-            return;
-        }
-
-        if (moduleName == "NuevaFactura")
-        {
-            _headerTitle.Text = "Nueva Factura";
-            _headerSubtitle.Text = "Crea una nueva factura o remisión";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Facturas");
-            ShowAnimatedView(_newInvoiceView, LoadInvoiceModule);
-            return;
-        }
-
-        if (moduleName == "Pagos")
-        {
-            _headerTitle.Text = "Pagos";
-            _headerSubtitle.Text = "Gestiona pagos de facturas";
-            _btnHeaderAction.Text = "+ Nuevo Pago";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevoPago");
-            ShowAnimatedView(_paymentsView, LoadPaymentsList);
-            return;
-        }
-
-        if (moduleName == "NuevoPago")
-        {
-            _headerTitle.Text = "Nuevo Pago";
-            _headerSubtitle.Text = "Registra un nuevo pago para una factura";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Pagos");
-            ShowAnimatedView(_newPaymentView, LoadPaymentModule);
-            return;
-        }
-
-        if (moduleName == "Inventario")
-        {
-            _headerTitle.Text = "Inventario";
-            _headerSubtitle.Text = "Gestión de productos y control de stock";
-            _btnHeaderAction.Text = "+ Nuevo Producto";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("NuevoProducto");
-            ShowAnimatedView(_inventoryView, LoadInventory);
-            return;
-        }
-
-        if (moduleName == "NuevoProducto")
-        {
-            _headerTitle.Text = "Nuevo Producto";
-            _headerSubtitle.Text = "Agrega un nuevo producto al catálogo";
-            _btnHeaderAction.Text = "← Volver";
-            _btnHeaderAction.Visible = true;
-            _headerAction = () => ShowModule("Inventario");
-            ShowAnimatedView(_newProductView, () => { });
-            return;
-        }
-
-        _headerTitle.Text = "Dashboard";
-        _headerSubtitle.Text = "Resumen de facturación y cartera";
-        ShowAnimatedView(_dashboardView, () =>
-        {
-            LoadDashboard();
-            LoadRecentInvoices();
-            LoadLowStock();
-        });
-    }
-
-    private void ShowAnimatedView(Panel targetView, Action loadAction)
-    {
-        _moduleAnimationTimer?.Stop();
-        _moduleAnimationTimer?.Dispose();
-        _moduleAnimationTimer = null;
-
-        _contentHost.Controls.Clear();
-        var hostSize = _contentHost.ClientSize;
-        if (hostSize.Width <= 0 || hostSize.Height <= 0)
-        {
-            targetView.Dock = DockStyle.Fill;
-            _contentHost.Controls.Add(targetView);
-            loadAction();
-            return;
-        }
-
-        targetView.Dock = DockStyle.None;
-        targetView.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        targetView.Bounds = new Rectangle(hostSize.Width, 0, hostSize.Width, hostSize.Height);
-        _contentHost.Controls.Add(targetView);
-        loadAction();
-
-        _moduleAnimationTimer = new System.Windows.Forms.Timer { Interval = 12 };
-        _moduleAnimationTimer.Tick += (_, _) =>
-        {
-            var step = Math.Max(24, targetView.Left / 5);
-            var next = targetView.Left - step;
-            if (next <= 0)
-            {
-                targetView.Left = 0;
-                _moduleAnimationTimer?.Stop();
-                _moduleAnimationTimer?.Dispose();
-                _moduleAnimationTimer = null;
-
-                targetView.Anchor = AnchorStyles.None;
-                targetView.Dock = DockStyle.Fill;
-                return;
-            }
-
-            targetView.Left = next;
-        };
-        _moduleAnimationTimer.Start();
-    }
-
-    private void SetMenuSelection(string selected)
-    {
-        foreach (var item in _menuButtons)
-        {
-            item.Value.BackColor = item.Key == selected
-                ? Color.FromArgb(44, 98, 52)
-                : Color.FromArgb(18, 57, 26);
+            var diameter = radius * 2;
+            var path = new GraphicsPath();
+            path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
+            path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);
+            path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
         }
     }
-
-    private static Label CreateCard(TableLayoutPanel cards, int column, String title, out Label secondary)
-    {
-        var card = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(8),
-            BackColor = Color.White,
-            Padding = new Padding(16),
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14
-        };
-
-        var titleLabel = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Height = 26
-        };
-
-        var valueLabel = new Label
-        {
-            Text = "$ 0",
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 19, FontStyle.Bold),
-            ForeColor = Color.FromArgb(11, 52, 22),
-            Height = 50
-        };
-
-        secondary = new Label
-        {
-            Text = string.Empty,
-            Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 9, FontStyle.Regular),
-            ForeColor = Color.DimGray,
-            Height = 20
-        };
-
-        var accent = new Panel
-        {
-            Size = new Size(56, 56),
-            BackColor = Color.FromArgb(240, 247, 240),
-            Location = new Point(card.Width - 62, 0),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
-        };
-
-        card.Controls.Add(accent);
-        card.Controls.Add(secondary);
-        card.Controls.Add(valueLabel);
-        card.Controls.Add(titleLabel);
-        cards.Controls.Add(card, column, 0);
-        return valueLabel;
-    }
-
-    private static Panel CreateDataPanel(string title, out DataGridView grid)
-    {
-        var panel = new RoundedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White,
-            Padding = new Padding(12),
-            BorderColor = Color.FromArgb(222, 226, 219),
-            Radius = 14
-        };
-
-        var label = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            Height = 32,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold)
-        };
-
-        grid = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            ReadOnly = true,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.None,
-            RowHeadersVisible = false
-        };
-
-        panel.Controls.Add(grid);
-        panel.Controls.Add(label);
-        return panel;
-    }
-
-    private static void ConfigureGridStyle(DataGridView grid)
-    {
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.None;
-        grid.GridColor = Color.FromArgb(229, 229, 229);
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(224, 239, 224);
-        grid.DefaultCellStyle.SelectionForeColor = Color.Black;
-        grid.EnableHeadersVisualStyles = false;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(245, 247, 245);
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(245, 247, 245);
-        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.Black;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-        grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(2, 6, 2, 6);
-        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
-        grid.ColumnHeadersHeight = 50;
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-    }
-
-    private void LoadDashboard()
-    {
-        var snapshot = _dashboardService.GetSnapshot();
-        _lblTotalFacturado.Text = snapshot.TotalFacturado.ToString("C0");
-        _lblSaldoPendiente.Text = snapshot.SaldoPendiente.ToString("C0");
-        _lblTotalPagos.Text = snapshot.TotalPagos.ToString("C0");
-        _lblClientesActivos.Text = snapshot.ClientesActivos.ToString("N0");
-        _lblPendingCount.Text = $"{snapshot.FacturasPendientes} facturas pendientes";
-        _lblPaymentsCount.Text = $"{snapshot.PagosRegistrados} pagos registrados";
-    }
-
-    private void LoadCustomers(string? search)
-    {
-        var data = _customerRepository.GetGridRows(search);
-        _gridCustomers.DataSource = data;
-
-        var idColumn = _gridCustomers.Columns["Id"];
-        if (idColumn != null)
-        {
-            idColumn.Visible = false;
-        }
-
-        _gridCustomers.Columns["Cliente"]!.HeaderText = "Cliente";
-        _gridCustomers.Columns["NitCedula"]!.HeaderText = "NIT / Cédula";
-        _gridCustomers.Columns["Contacto"]!.HeaderText = "Contacto";
-        _gridCustomers.Columns["Balance"]!.HeaderText = "Balance";
-        _gridCustomers.Columns["NumeroFacturas"]!.HeaderText = "Facturas";
-        _gridCustomers.Columns["Balance"]!.DefaultCellStyle.Format = "C0";
-        _gridCustomers.Columns["Cliente"]!.MinimumWidth = 220;
-        _gridCustomers.Columns["NitCedula"]!.MinimumWidth = 140;
-        _gridCustomers.Columns["Contacto"]!.MinimumWidth = 230;
-        _gridCustomers.Columns["Balance"]!.MinimumWidth = 130;
-        _gridCustomers.Columns["NumeroFacturas"]!.MinimumWidth = 90;
-
-        EnsureCustomerActionColumns();
-    }
-
-    private void EnsureCustomerActionColumns()
-    {
-        if (_gridCustomers.Columns.Contains("AccionVer"))
-        {
-            return;
-        }
-
-        _gridCustomers.Columns.Add(new DataGridViewButtonColumn
-        {
-            Name = "AccionVer",
-            HeaderText = "Acciones",
-            Text = "Ver",
-            UseColumnTextForButtonValue = true,
-            Width = 86,
-            FlatStyle = FlatStyle.Flat,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-
-        _gridCustomers.Columns.Add(new DataGridViewButtonColumn
-        {
-            Name = "AccionEditar",
-            HeaderText = "",
-            Text = "Editar",
-            UseColumnTextForButtonValue = true,
-            Width = 86,
-            FlatStyle = FlatStyle.Flat,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-
-        _gridCustomers.Columns.Add(new DataGridViewButtonColumn
-        {
-            Name = "AccionEliminar",
-            HeaderText = "",
-            Text = "Eliminar",
-            UseColumnTextForButtonValue = true,
-            Width = 92,
-            FlatStyle = FlatStyle.Flat,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-    }
-
-    private void OnCustomerGridCellContentClick(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (e.RowIndex < 0)
-        {
-            return;
-        }
-
-        var column = _gridCustomers.Columns[e.ColumnIndex].Name;
-        switch (column)
-        {
-            case "AccionVer":
-                ViewSelectedCustomer();
-                break;
-            case "AccionEditar":
-                EditSelectedCustomer();
-                break;
-            case "AccionEliminar":
-                DeleteSelectedCustomer();
-                break;
-        }
-    }
-
-    private void OpenNewCustomerDialog()
-    {
-        var draft = new CustomerDto
-        {
-            Codigo = _customerRepository.GenerateNextCode(),
-            TipoIva = "GRAVADO",
-            Activo = true
-        };
-
-        using var dialog = new CustomerEditorDialog(draft);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null)
-        {
-            return;
-        }
-
-        UpsertCustomer(dialog.Result);
-    }
-
-    private void EditSelectedCustomer()
-    {
-        if (_gridCustomers.CurrentRow?.DataBoundItem is not CustomerGridRowDto row)
-        {
-            return;
-        }
-
-        var selected = _customerRepository.GetById(row.Id);
-        if (selected is null)
-        {
-            return;
-        }
-
-        using var dialog = new CustomerEditorDialog(selected);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Result is null)
-        {
-            return;
-        }
-
-        UpsertCustomer(dialog.Result);
-    }
-
-    private void ViewSelectedCustomer()
-    {
-        if (_gridCustomers.CurrentRow?.DataBoundItem is not CustomerGridRowDto row)
-        {
-            return;
-        }
-
-        MessageBox.Show($"Cliente: {row.Cliente}\nNIT/Cédula: {row.NitCedula}\nContacto: {row.Contacto}\nBalance: {row.Balance:C0}\nFacturas: {row.NumeroFacturas}",
-            "Detalle de cliente", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private void DeleteSelectedCustomer()
-    {
-        if (_gridCustomers.CurrentRow?.DataBoundItem is not CustomerGridRowDto row)
-        {
-            return;
-        }
-
-        var confirm = MessageBox.Show($"¿Deseas eliminar el cliente {row.Cliente}?", "Eliminar cliente", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-        if (confirm != DialogResult.Yes)
-        {
-            return;
-        }
-
-        var changed = _customerRepository.DeleteOrDeactivate(row.Id);
-        if (!changed)
-        {
-            MessageBox.Show("No se pudo eliminar el cliente en la base de datos.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        LoadCustomers(_txtSearchCustomer.Text);
-        LoadDashboard();
-        MessageBox.Show("Cliente eliminado correctamente.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    private void UpsertCustomer(CustomerDto customer)
-    {
-        if (string.IsNullOrWhiteSpace(customer.Codigo))
-        {
-            customer = new CustomerDto
-            {
-                Id = customer.Id,
-                Codigo = _customerRepository.GenerateNextCode(),
-                Nombre = customer.Nombre,
-                Nit = customer.Nit,
-                Direccion = customer.Direccion,
-                Telefono = customer.Telefono,
-                Email = customer.Email,
-                TipoIva = customer.TipoIva,
-                Activo = customer.Activo
-            };
-        }
-
-        long? excludeId = customer.Id > 0 ? customer.Id : null;
-        if (_customerRepository.ExistsDuplicate(customer.Codigo, customer.Nit, excludeId))
-        {
-            MessageBox.Show("Ya existe un cliente con el mismo código o NIT.", "Validación", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        if (customer.Id > 0)
-        {
-            _customerRepository.Update(customer);
-            MessageBox.Show("Cliente actualizado.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        else
-        {
-            _customerRepository.Insert(customer);
-            MessageBox.Show("Cliente creado.", "Clientes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        LoadCustomers(_txtSearchCustomer.Text);
-        LoadDashboard();
-    }
-
-    private void LoadInvoiceModule()
-    {
-        var customers = _invoiceRepository.GetActiveCustomers();
-        _cmbInvoiceCustomer.DataSource = customers;
-        _cmbInvoiceCustomer.DisplayMember = nameof(InvoiceCustomerLookupDto.DisplayName);
-        _cmbInvoiceCustomer.ValueMember = nameof(InvoiceCustomerLookupDto.Id);
-
-        var paymentMethods = _invoiceRepository.GetPaymentMethods();
-        _cmbInvoicePaymentMethod.DataSource = paymentMethods;
-        _cmbInvoicePaymentMethod.DisplayMember = nameof(PaymentMethodLookupDto.Nombre);
-        _cmbInvoicePaymentMethod.ValueMember = nameof(PaymentMethodLookupDto.Id);
-
-        var products = _invoiceRepository.GetProducts();
-        
-        if (products.Count == 0)
-        {
-            MessageBox.Show("No hay productos registrados en la base de datos. Por favor, verifica la inicialización.", "Sin Productos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-        
-        _cmbItemProduct.DataSource = products;
-        _cmbItemProduct.DisplayMember = nameof(ProductLookupDto.DisplayName);
-        _cmbItemProduct.ValueMember = nameof(ProductLookupDto.Id);
-
-        _currentIvaRate = _invoiceRepository.GetIvaRate();
-        LoadInvoicesList();
-        ClearInvoiceForm();
-    }
-
-    private void LoadInvoicesList()
-    {
-        _gridInvoices.DataSource = _invoiceRepository.GetRecentInvoices();
-        var idColumn = _gridInvoices.Columns["Id"];
-        if (idColumn != null)
-        {
-            idColumn.Visible = false;
-        }
-
-        _gridInvoices.Columns["Numero"]!.HeaderText = "N° Factura";
-        _gridInvoices.Columns["Fecha"]!.HeaderText = "Fecha";
-        _gridInvoices.Columns["Cliente"]!.HeaderText = "Cliente";
-        _gridInvoices.Columns["Total"]!.DefaultCellStyle.Format = "C0";
-        _gridInvoices.Columns["Saldo"]!.DefaultCellStyle.Format = "C0";
-    }
-
-    private void OnProductChanged()
-    {
-        if (_cmbItemProduct.SelectedItem is not ProductLookupDto product)
-        {
-            _lblItemStock.Text = "Stock: -";
-            return;
-        }
-
-        _txtItemDescription.Text = product.Nombre;
-        _numItemPrice.Value = Math.Min(_numItemPrice.Maximum, product.PrecioBase);
-        _lblItemStock.Text = $"Stock: {product.StockActual:N0}";
-    }
-
-    private void AddInvoiceItem()
-    {
-        if (_cmbItemProduct.SelectedItem is not ProductLookupDto product)
-        {
-            MessageBox.Show("Selecciona un producto.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var quantity = _numItemQuantity.Value;
-        if (quantity <= 0)
-        {
-            MessageBox.Show("La cantidad debe ser mayor a cero.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        if (quantity > product.StockActual)
-        {
-            MessageBox.Show("La cantidad supera el stock disponible.", "Inventario", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-
-        var price = _numItemPrice.Value;
-        var total = Math.Round(quantity * price, 0);
-
-        // Verificar si el producto ya existe en los ítems
-        var existingItem = _invoiceItems.FirstOrDefault(x => x.ProductId == product.Id);
-        if (existingItem != null)
-        {
-            existingItem.Cantidad += quantity;
-            existingItem.TotalLinea = Math.Round(existingItem.Cantidad * existingItem.PrecioUnitario, 0);
-        }
-        else
-        {
-            _invoiceItems.Add(new InvoiceItemDraft
-            {
-                ProductId = product.Id,
-                Codigo = product.Codigo,
-                Descripcion = string.IsNullOrWhiteSpace(_txtItemDescription.Text) ? product.Nombre : _txtItemDescription.Text.Trim(),
-                Cantidad = quantity,
-                PrecioUnitario = price,
-                AplicaIva = _chkItemIva.Checked,
-                TotalLinea = total
-            });
-        }
-
-        // Limpiar formulario para agregar más items
-        _numItemQuantity.Value = 1;
-        _txtItemDescription.Clear();
-        if (_cmbItemProduct.Items.Count > 0)
-        {
-            _cmbItemProduct.SelectedIndex = 0;
-        }
-        
-        RecalculateInvoiceTotals();
-        _gridInvoiceItems.Refresh();
-    }
-
-    private void RemoveInvoiceItem()
-    {
-        if (_gridInvoiceItems.CurrentRow?.DataBoundItem is InvoiceItemDraft item)
-        {
-            _invoiceItems.Remove(item);
-            RecalculateInvoiceTotals();
-        }
-    }
-
-    private (decimal subtotal, decimal iva, decimal total) ComputeInvoiceTotals()
-    {
-        foreach (var item in _invoiceItems)
-        {
-            item.TotalLinea = Math.Round(item.Cantidad * item.PrecioUnitario, 0);
-        }
-
-        var subtotal = _invoiceItems.Sum(x => x.TotalLinea);
-        var ivaBase = _invoiceItems.Where(x => x.AplicaIva).Sum(x => x.TotalLinea);
-        var iva = Math.Round(ivaBase * _currentIvaRate, 0);
-        var total = subtotal + iva;
+}
