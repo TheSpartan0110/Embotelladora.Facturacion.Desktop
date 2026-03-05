@@ -813,7 +813,13 @@ public partial class Form1 : Form
         ConfigureGridStyle(_gridInvoiceItems);
         _gridInvoiceItems.CellContentClick += (sender, e) =>
         {
-            if (e.ColumnIndex == _gridInvoiceItems.Columns["Eliminar"].Index && e.RowIndex >= 0)
+            var eliminarColumn = _gridInvoiceItems.Columns["Eliminar"];
+            if (eliminarColumn is null)
+            {
+                return;
+            }
+
+            if (e.ColumnIndex == eliminarColumn.Index && e.RowIndex >= 0)
             {
                 if (_gridInvoiceItems.Rows[e.RowIndex].DataBoundItem is InvoiceItemDraft item)
                 {
@@ -1143,7 +1149,7 @@ public partial class Form1 : Form
         }
     }
 
-    private static Label CreateCard(TableLayoutPanel cards, int column, string title, out Label secondary)
+    private static Label CreateCard(TableLayoutPanel cards, int column, String title, out Label secondary)
     {
         var card = new RoundedPanel
         {
