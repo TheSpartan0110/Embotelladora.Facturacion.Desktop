@@ -1,4 +1,5 @@
 using Embotelladora.Facturacion.Desktop.Data;
+using Microsoft.Data.Sqlite;
 
 namespace Embotelladora.Facturacion.Desktop.Features.Facturas;
 
@@ -186,6 +187,17 @@ ORDER BY Faltante DESC;";
 
     public void AjustarInventario(long productoId, decimal cantidad, string tipo, string nota)
     {
+        if (cantidad <= 0)
+        {
+            throw new InvalidOperationException("La cantidad debe ser mayor a cero.");
+        }
+
+        var tipoNormalizado = (tipo ?? string.Empty).Trim().ToUpperInvariant();
+        if (tipoNormalizado is not ("ENTRADA" or "SALIDA"))
+        {
+            throw new InvalidOperationException("Tipo de movimiento inválido.");
+        }
+
         using var connection = AppDatabase.CreateConnection();
         connection.Open();
 
@@ -193,7 +205,27 @@ ORDER BY Faltante DESC;";
 
         try
         {
-            // Insertar movimiento
+            decimal stockActual;
+            using (var stockCommand = connection.CreateCommand())
+            {
+                stockCommand.Transaction = transaction;
+                stockCommand.CommandText = "SELECT StockActual FROM ProductoExt WHERE Id = @productoId;";
+                stockCommand.Parameters.AddWithValue("@productoId", productoId);
+
+                var scalar = stockCommand.ExecuteScalar();
+                if (scalar is null || scalar == DBNull.Value)
+                {
+                    throw new InvalidOperationException("El producto seleccionado no existe.");
+                }
+
+                stockActual = Convert.ToDecimal(Convert.ToDouble(scalar));
+            }
+
+            if (tipoNormalizado == "SALIDA" && cantidad > stockActual)
+            {
+                throw new InvalidOperationException("La salida supera el stock disponible.");
+            }
+
             using var movCommand = connection.CreateCommand();
             movCommand.Transaction = transaction;
             movCommand.CommandText = @"
@@ -202,35 +234,97 @@ VALUES (@productoId, @fecha, @tipo, @cantidad, NULL, @nota);";
 
             movCommand.Parameters.AddWithValue("@productoId", productoId);
             movCommand.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd"));
-            movCommand.Parameters.AddWithValue("@tipo", tipo);
+            movCommand.Parameters.AddWithValue("@tipo", tipoNormalizado);
             movCommand.Parameters.AddWithValue("@cantidad", cantidad);
-            movCommand.Parameters.AddWithValue("@nota", nota);
+            movCommand.Parameters.AddWithValue("@nota", string.IsNullOrWhiteSpace(nota) ? "Ajuste manual" : nota.Trim());
             movCommand.ExecuteNonQuery();
 
-            // Actualizar stock
             using var updateCommand = connection.CreateCommand();
             updateCommand.Transaction = transaction;
-
-            if (tipo == "ENTRADA")
-            {
-                updateCommand.CommandText = @"
+            updateCommand.CommandText = @"
 UPDATE ProductoExt 
-SET StockActual = StockActual + @cantidad 
+SET StockActual = StockActual + @delta 
 WHERE Id = @productoId;";
-            }
-            else
-            {
-                updateCommand.CommandText = @"
-UPDATE ProductoExt 
-SET StockActual = StockActual - @cantidad 
-WHERE Id = @productoId;";
-            }
 
-            updateCommand.Parameters.AddWithValue("@cantidad", cantidad);
+            var delta = tipoNormalizado == "ENTRADA" ? cantidad : -cantidad;
+            updateCommand.Parameters.AddWithValue("@delta", delta);
             updateCommand.Parameters.AddWithValue("@productoId", productoId);
             updateCommand.ExecuteNonQuery();
 
             transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
+
+    public void CrearProducto(ProductoCreateRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Codigo))
+        {
+            throw new InvalidOperationException("El código del producto es obligatorio.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Nombre))
+        {
+            throw new InvalidOperationException("El nombre del producto es obligatorio.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Unidad))
+        {
+            throw new InvalidOperationException("La unidad del producto es obligatoria.");
+        }
+
+        if (request.PrecioBase < 0 || request.StockActual < 0 || request.StockMinimo < 0)
+        {
+            throw new InvalidOperationException("Precio y stocks no pueden ser negativos.");
+        }
+
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var transaction = connection.BeginTransaction();
+
+        try
+        {
+            using var insertCommand = connection.CreateCommand();
+            insertCommand.Transaction = transaction;
+            insertCommand.CommandText = @"
+INSERT INTO ProductoExt(Codigo, Nombre, Unidad, PrecioBase, StockActual, StockMinimo, Activo)
+VALUES (@codigo, @nombre, @unidad, @precioBase, @stockActual, @stockMinimo, 1);
+SELECT last_insert_rowid();";
+
+            insertCommand.Parameters.AddWithValue("@codigo", request.Codigo.Trim());
+            insertCommand.Parameters.AddWithValue("@nombre", request.Nombre.Trim());
+            insertCommand.Parameters.AddWithValue("@unidad", request.Unidad.Trim());
+            insertCommand.Parameters.AddWithValue("@precioBase", request.PrecioBase);
+            insertCommand.Parameters.AddWithValue("@stockActual", request.StockActual);
+            insertCommand.Parameters.AddWithValue("@stockMinimo", request.StockMinimo);
+
+            var newProductId = Convert.ToInt64(insertCommand.ExecuteScalar());
+
+            if (request.StockActual > 0)
+            {
+                using var movementCommand = connection.CreateCommand();
+                movementCommand.Transaction = transaction;
+                movementCommand.CommandText = @"
+INSERT INTO MovimientoInventarioExt (ProductoId, Fecha, Tipo, Cantidad, ReferenciaFacturaId, Nota)
+VALUES (@productoId, @fecha, 'ENTRADA', @cantidad, NULL, @nota);";
+                movementCommand.Parameters.AddWithValue("@productoId", newProductId);
+                movementCommand.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd"));
+                movementCommand.Parameters.AddWithValue("@cantidad", request.StockActual);
+                movementCommand.Parameters.AddWithValue("@nota", "Stock inicial");
+                movementCommand.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        {
+            transaction.Rollback();
+            throw new InvalidOperationException("Ya existe un producto con el mismo código.");
         }
         catch
         {

@@ -200,6 +200,15 @@ internal sealed class EdadSaldoDto
 }
 
 // Balance DTOs
+internal enum BalancePeriodo
+{
+    Diario,
+    Quincenal,
+    Mensual,
+    Anual,
+    Total
+}
+
 internal sealed class BalanceResumenDto
 {
     public decimal TotalFacturado { get; set; }
@@ -283,4 +292,14 @@ internal sealed class ProductoStockBajoDto
     public decimal Faltante { get; set; }
     public decimal PrecioBase { get; set; }
     public decimal ValorFaltante { get; set; }
+}
+
+internal sealed class ProductoCreateRequest
+{
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public string Unidad { get; set; } = string.Empty;
+    public decimal PrecioBase { get; set; }
+    public decimal StockActual { get; set; }
+    public decimal StockMinimo { get; set; }
 }
