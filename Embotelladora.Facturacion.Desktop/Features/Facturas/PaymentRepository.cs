@@ -16,8 +16,8 @@ internal sealed class PaymentRepository
 SELECT f.Id, f.Numero, c.Nombre, f.Saldo
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
-WHERE f.Saldo > 0 AND f.Estado = 'Enviada'
-ORDER BY f.Numero;";
+WHERE f.Saldo > 0 AND f.Estado IN ('Enviada', 'Pendiente')
+ORDER BY f.Fecha DESC, f.Numero DESC;";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -34,7 +34,49 @@ ORDER BY f.Numero;";
         return result;
     }
 
-    public List<PaymentGridRowDto> GetPaymentHistory(int limit = 30)
+    public int GetPaymentCount(long facturaId)
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM Pago WHERE FacturaId = @facturaId;";
+        command.Parameters.AddWithValue("@facturaId", facturaId);
+
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    public PaymentResumenDto GetResumen()
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+SELECT 
+    COUNT(*) as TotalPagos,
+    IFNULL(SUM(p.Valor), 0) as MontoTotal,
+    COUNT(DISTINCT f.ClienteId) as ClientesPagaron,
+    COUNT(DISTINCT p.FacturaId) as FacturasPagadas
+FROM Pago p
+INNER JOIN Factura f ON f.Id = p.FacturaId;";
+
+        using var reader = command.ExecuteReader();
+        if (reader.Read())
+        {
+            return new PaymentResumenDto
+            {
+                TotalPagos = reader.GetInt32(0),
+                MontoTotal = Convert.ToDecimal(reader.GetDouble(1)),
+                ClientesPagaron = reader.GetInt32(2),
+                FacturasPagadas = reader.GetInt32(3)
+            };
+        }
+
+        return new PaymentResumenDto();
+    }
+
+    public List<PaymentGridRowDto> GetPaymentHistory(string? search = null)
     {
         var result = new List<PaymentGridRowDto>();
 
@@ -42,15 +84,21 @@ ORDER BY f.Numero;";
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = @"
+        var whereClause = "1=1";
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            whereClause = "(f.Numero LIKE @search OR c.Nombre LIKE @search OR mp.Nombre LIKE @search)";
+            command.Parameters.AddWithValue("@search", $"%{search.Trim()}%");
+        }
+
+        command.CommandText = $@"
 SELECT p.Id, f.Numero, c.Nombre, p.Fecha, p.Valor, mp.Nombre, p.Referencia, p.Notas
 FROM Pago p
 INNER JOIN Factura f ON f.Id = p.FacturaId
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 LEFT JOIN MetodoPago mp ON mp.Id = p.MetodoPagoId
-ORDER BY f.Numero
-LIMIT @limit;";
-        command.Parameters.AddWithValue("@limit", limit);
+WHERE {whereClause}
+ORDER BY p.Fecha DESC, p.Id DESC;";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -143,6 +191,51 @@ WHERE Id = @facturaId;";
             statusCommand.Parameters.AddWithValue("@id", request.FacturaId);
             statusCommand.ExecuteNonQuery();
         }
+
+        transaction.Commit();
+    }
+
+    public void VoidPayment(long paymentId)
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var transaction = connection.BeginTransaction();
+
+        // Obtener datos del pago
+        using var getCommand = connection.CreateCommand();
+        getCommand.Transaction = transaction;
+        getCommand.CommandText = "SELECT FacturaId, Valor FROM Pago WHERE Id = @id;";
+        getCommand.Parameters.AddWithValue("@id", paymentId);
+
+        using var reader = getCommand.ExecuteReader();
+        if (!reader.Read())
+        {
+            throw new InvalidOperationException("El pago no fue encontrado.");
+        }
+
+        var facturaId = reader.GetInt64(0);
+        var valor = reader.GetDouble(1);
+        reader.Close();
+
+        // Devolver el saldo a la factura
+        using var updateCommand = connection.CreateCommand();
+        updateCommand.Transaction = transaction;
+        updateCommand.CommandText = @"
+UPDATE Factura
+SET Saldo = Saldo + @valor,
+    Estado = CASE WHEN Saldo + @valor > 0 THEN 'Pendiente' ELSE Estado END
+WHERE Id = @facturaId;";
+        updateCommand.Parameters.AddWithValue("@valor", valor);
+        updateCommand.Parameters.AddWithValue("@facturaId", facturaId);
+        updateCommand.ExecuteNonQuery();
+
+        // Eliminar el pago
+        using var deleteCommand = connection.CreateCommand();
+        deleteCommand.Transaction = transaction;
+        deleteCommand.CommandText = "DELETE FROM Pago WHERE Id = @id;";
+        deleteCommand.Parameters.AddWithValue("@id", paymentId);
+        deleteCommand.ExecuteNonQuery();
 
         transaction.Commit();
     }

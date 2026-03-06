@@ -6,7 +6,20 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <SourceRevisionId>unknown</SourceRevisionId>
   </PropertyGroup>
+
+  <Target Name="SetGitHash" BeforeTargets="GetAssemblyVersion" Condition="'$(BuildingInsideVisualStudio)' == 'true' Or '$(ContinuousIntegrationBuild)' == 'true' Or Exists('$(MSBuildProjectDirectory)\..\\.git')">
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitHash" />
+    </Exec>
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; log -1 --format=%%cd --date=short" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitDate" />
+    </Exec>
+    <PropertyGroup Condition="'$(_GitHash)' != ''">
+      <SourceRevisionId>$(_GitHash)</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />

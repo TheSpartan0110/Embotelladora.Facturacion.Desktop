@@ -110,6 +110,14 @@ internal sealed class PaymentSummaryDto
     public string MetodoPago { get; set; } = string.Empty;
 }
 
+internal sealed class PaymentResumenDto
+{
+    public int TotalPagos { get; set; }
+    public decimal MontoTotal { get; set; }
+    public int ClientesPagaron { get; set; }
+    public int FacturasPagadas { get; set; }
+}
+
 // Lookup/Common DTOs
 internal sealed class PaymentMethodLookupDto
 {
@@ -167,6 +175,8 @@ internal sealed class CarteraResumenDto
     public int FacturasPendientes { get; set; }
     public decimal TotalPorCobrar { get; set; }
     public decimal SaldoVencido { get; set; }
+    public int ClientesConSaldoAFavor { get; set; }
+    public decimal TotalSaldoAFavor { get; set; }
 }
 
 internal sealed class FacturaPendienteDto
@@ -197,6 +207,17 @@ internal sealed class EdadSaldoDto
     public string RangoEdad { get; set; } = string.Empty;
     public int CantidadFacturas { get; set; }
     public decimal TotalSaldo { get; set; }
+    public decimal PorcentajeSaldo { get; set; }
+}
+
+internal sealed class ClienteSaldoFavorDto
+{
+    public long Id { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public string Telefono { get; set; } = string.Empty;
+    public int FacturasConCredito { get; set; }
+    public decimal SaldoAFavor { get; set; }
 }
 
 // Balance DTOs
