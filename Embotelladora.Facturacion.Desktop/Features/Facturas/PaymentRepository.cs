@@ -17,7 +17,7 @@ SELECT f.Id, f.Numero, c.Nombre, f.Saldo
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 WHERE f.Saldo > 0 AND f.Estado = 'Enviada'
-ORDER BY f.Fecha DESC;";
+ORDER BY f.Numero;";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -48,7 +48,7 @@ FROM Pago p
 INNER JOIN Factura f ON f.Id = p.FacturaId
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 LEFT JOIN MetodoPago mp ON mp.Id = p.MetodoPagoId
-ORDER BY p.Fecha DESC
+ORDER BY f.Numero
 LIMIT @limit;";
         command.Parameters.AddWithValue("@limit", limit);
 

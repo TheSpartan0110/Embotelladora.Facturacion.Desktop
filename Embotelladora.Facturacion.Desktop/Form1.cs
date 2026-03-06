@@ -110,6 +110,7 @@ public partial class Form1 : Form
     private DataGridView _gridMovimientos = null!;
     private DataGridView _gridStockBajo = null!;
     private TextBox _txtSearchInventario = null!;
+    private Label _lblMovimientosTitulo = null!;
 
     public Form1()
     {
@@ -1821,7 +1822,7 @@ SELECT f.Numero,
        f.Estado
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
-ORDER BY date(f.Fecha) DESC, f.Id DESC
+ORDER BY f.Numero
 LIMIT 12;";
 
         _gridRecentInvoices.DataSource = ExecuteQuery(sql);
@@ -1838,7 +1839,7 @@ SELECT Codigo,
        (StockMinimo - StockActual) AS Faltante
 FROM ProductoExt
 WHERE StockActual <= StockMinimo
-ORDER BY Faltante DESC;";
+ORDER BY Codigo;";
 
         _gridLowStock.DataSource = ExecuteQuery(sql);
         ConfigureGridStyle(_gridLowStock);
@@ -3447,6 +3448,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridProductosInventario);
+        _gridProductosInventario.SelectionChanged += (_, _) => OnProductoInventarioSelected();
         AddGridWithTopMargin(productosCard, _gridProductosInventario, 20);
 
         contentLayout.Controls.Add(productosCard, 0, 0);
@@ -3461,7 +3463,7 @@ ORDER BY Faltante DESC;";
             Margin = new Padding(6, 0, 0, 12)
         };
 
-        var movimientosTitle = new Label
+        _lblMovimientosTitulo = new Label
         {
             Text = "📋 Movimientos Recientes",
             Dock = DockStyle.Top,
@@ -3469,7 +3471,7 @@ ORDER BY Faltante DESC;";
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
-        movimientosCard.Controls.Add(movimientosTitle);
+        movimientosCard.Controls.Add(_lblMovimientosTitulo);
 
         _gridMovimientos = new DataGridView
         {
@@ -3596,9 +3598,23 @@ ORDER BY Faltante DESC;";
         }
     }
 
-    private void LoadMovimientos()
+    private void OnProductoInventarioSelected()
     {
-        var movimientos = _inventarioRepository.GetMovimientos(50);
+        if (_gridProductosInventario.CurrentRow?.DataBoundItem is ProductoInventarioDto producto)
+        {
+            _lblMovimientosTitulo.Text = $"📋 Movimientos — {producto.Nombre}";
+            LoadMovimientos(producto.Id);
+        }
+        else
+        {
+            _lblMovimientosTitulo.Text = "📋 Movimientos Recientes";
+            LoadMovimientos();
+        }
+    }
+
+    private void LoadMovimientos(long? productoId = null)
+    {
+        var movimientos = _inventarioRepository.GetMovimientos(50, productoId);
         _gridMovimientos.DataSource = movimientos;
 
         if (_gridMovimientos.Columns.Count > 0)

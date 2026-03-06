@@ -62,7 +62,7 @@ SELECT
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 WHERE f.Saldo > 0
-ORDER BY DiasTranscurridos DESC, f.Fecha DESC;";
+ORDER BY f.Numero;";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -104,7 +104,7 @@ FROM Cliente c
 INNER JOIN Factura f ON f.ClienteId = c.Id
 WHERE f.Saldo > 0
 GROUP BY c.Id, c.Codigo, c.Nombre, c.Telefono
-ORDER BY SaldoTotal DESC;";
+ORDER BY c.Codigo;";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())

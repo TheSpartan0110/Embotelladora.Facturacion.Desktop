@@ -204,7 +204,7 @@ SELECT
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 WHERE {where}
-ORDER BY date(f.Fecha) DESC, f.Id DESC;";
+ORDER BY f.Numero;";
 
         AddDateParameters(command, rango);
 
@@ -245,7 +245,7 @@ SELECT
 FROM Pago p
 LEFT JOIN MetodoPago mp ON mp.Id = p.MetodoPagoId
 WHERE p.FacturaId = @facturaId
-ORDER BY date(p.Fecha) DESC, p.Id DESC;";
+ORDER BY p.Id;";
 
         var param = command.CreateParameter();
         param.ParameterName = "@facturaId";

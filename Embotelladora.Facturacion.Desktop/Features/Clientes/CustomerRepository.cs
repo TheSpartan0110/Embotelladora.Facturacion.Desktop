@@ -49,7 +49,7 @@ WHERE c.Activo = 1";
             command.Parameters.AddWithValue("@filter", $"%{search.Trim()}%");
         }
 
-        sql += " GROUP BY c.Id, c.Nombre, c.Direccion, c.Nit, c.Email, c.Telefono ORDER BY c.Nombre;";
+        sql += " GROUP BY c.Id, c.Nombre, c.Direccion, c.Nit, c.Email, c.Telefono ORDER BY c.Codigo;";
         command.CommandText = sql;
 
         using var reader = command.ExecuteReader();
@@ -81,7 +81,7 @@ WHERE c.Activo = 1";
 SELECT Id, Codigo, Nombre, Nit, IFNULL(Direccion, ''), IFNULL(Telefono, ''), IFNULL(Email, ''), Activo
 FROM Cliente
 WHERE (@search IS NULL OR trim(@search) = '' OR Nombre LIKE @filter OR Nit LIKE @filter OR Codigo LIKE @filter)
-ORDER BY Nombre;";
+ORDER BY Codigo;";
 
         command.Parameters.AddWithValue("@search", (object?)search ?? DBNull.Value);
         command.Parameters.AddWithValue("@filter", $"%{search?.Trim()}%");

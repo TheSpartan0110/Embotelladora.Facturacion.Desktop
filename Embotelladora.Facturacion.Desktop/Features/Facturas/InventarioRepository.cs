@@ -65,13 +65,7 @@ SELECT
     END as EstadoStock
 FROM ProductoExt
 {whereClause}
-ORDER BY 
-    CASE 
-        WHEN StockActual = 0 THEN 1
-        WHEN StockActual <= StockMinimo THEN 2
-        ELSE 3
-    END,
-    Nombre;";
+ORDER BY Codigo;";
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -98,7 +92,7 @@ ORDER BY
         return result;
     }
 
-    public List<MovimientoInventarioDto> GetMovimientos(int limite = 50)
+    public List<MovimientoInventarioDto> GetMovimientos(int limite = 50, long? productoId = null)
     {
         var result = new List<MovimientoInventarioDto>();
 
@@ -106,7 +100,10 @@ ORDER BY
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = @"
+
+        var whereClause = productoId.HasValue ? "WHERE m.ProductoId = @productoId" : "";
+
+        command.CommandText = $@"
 SELECT 
     m.Id,
     m.Fecha,
@@ -120,9 +117,15 @@ SELECT
     END as Referencia
 FROM MovimientoInventarioExt m
 INNER JOIN ProductoExt p ON p.Id = m.ProductoId
+{whereClause}
 ORDER BY date(m.Fecha) DESC, m.Id DESC
 LIMIT @limite;";
         command.Parameters.AddWithValue("@limite", limite);
+
+        if (productoId.HasValue)
+        {
+            command.Parameters.AddWithValue("@productoId", productoId.Value);
+        }
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -163,7 +166,7 @@ SELECT
     ((StockMinimo - StockActual) * PrecioBase) as ValorFaltante
 FROM ProductoExt
 WHERE StockActual <= StockMinimo
-ORDER BY Faltante DESC;";
+ORDER BY Codigo;";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())

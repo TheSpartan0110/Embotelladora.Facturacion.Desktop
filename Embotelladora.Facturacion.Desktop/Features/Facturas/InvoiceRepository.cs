@@ -89,7 +89,7 @@ WHERE Numero LIKE 'FAC-%';";
             command.Parameters.AddWithValue("@search", $"%{search}%");
         }
         
-        sql += " ORDER BY Nombre;";
+        sql += " ORDER BY Codigo;";
         command.CommandText = sql;
 
         using var reader = command.ExecuteReader();
@@ -133,7 +133,7 @@ WHERE 1=1";
             command.Parameters.AddWithValue("@estado", estado);
         }
 
-        sql += " ORDER BY f.Fecha DESC, f.Id DESC;";
+        sql += " ORDER BY f.Numero;";
         command.CommandText = sql;
 
         using var reader = command.ExecuteReader();
@@ -170,7 +170,7 @@ WHERE 1=1";
 SELECT f.Id, f.Numero, f.Fecha, c.Nombre, f.Total, f.Saldo, f.Estado
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
-ORDER BY f.Fecha DESC, f.Id DESC
+ORDER BY f.Numero
 LIMIT @limit;";
         command.Parameters.AddWithValue("@limit", limit);
 
