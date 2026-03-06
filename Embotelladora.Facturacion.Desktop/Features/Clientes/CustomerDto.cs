@@ -9,6 +9,5 @@ internal sealed class CustomerDto
     public string Direccion { get; init; } = string.Empty;
     public string Telefono { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
-    public string TipoIva { get; init; } = "GRAVADO";
     public bool Activo { get; init; } = true;
 }

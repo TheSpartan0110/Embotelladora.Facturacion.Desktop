@@ -8,7 +8,6 @@ internal sealed class CustomerEditorDialog : Form
     private readonly TextBox _txtDireccion = new() { Dock = DockStyle.Fill };
     private readonly TextBox _txtTelefono = new() { Dock = DockStyle.Fill };
     private readonly TextBox _txtEmail = new() { Dock = DockStyle.Fill };
-    private readonly ComboBox _cmbTipoIva = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox _chkActivo = new() { Dock = DockStyle.Left, Text = "Cliente activo", AutoSize = true };
 
     public CustomerDto? Result { get; private set; }
@@ -30,17 +29,15 @@ internal sealed class CustomerEditorDialog : Form
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
-            RowCount = 8,
-            Height = 290
+            RowCount = 7,
+            Height = 255
         };
         form.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
         form.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 7; i++)
         {
             form.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         }
-
-        _cmbTipoIva.Items.AddRange(["GRAVADO", "EXENTO"]);
 
         AddRow(form, 0, "Código", _txtCodigo);
         AddRow(form, 1, "Nombre", _txtNombre);
@@ -48,8 +45,7 @@ internal sealed class CustomerEditorDialog : Form
         AddRow(form, 3, "Dirección", _txtDireccion);
         AddRow(form, 4, "Teléfono", _txtTelefono);
         AddRow(form, 5, "Email", _txtEmail);
-        AddRow(form, 6, "Tipo IVA", _cmbTipoIva);
-        AddRow(form, 7, "Activo", _chkActivo);
+        AddRow(form, 6, "Activo", _chkActivo);
 
         var buttons = new FlowLayoutPanel
         {
@@ -102,11 +98,6 @@ internal sealed class CustomerEditorDialog : Form
         _txtDireccion.Text = customer.Direccion;
         _txtTelefono.Text = customer.Telefono;
         _txtEmail.Text = customer.Email;
-        _cmbTipoIva.SelectedItem = customer.TipoIva;
-        if (_cmbTipoIva.SelectedIndex < 0)
-        {
-            _cmbTipoIva.SelectedItem = "GRAVADO";
-        }
         _chkActivo.Checked = customer.Activo;
     }
 
@@ -127,7 +118,6 @@ internal sealed class CustomerEditorDialog : Form
             Direccion = _txtDireccion.Text.Trim(),
             Telefono = _txtTelefono.Text.Trim(),
             Email = _txtEmail.Text.Trim(),
-            TipoIva = _cmbTipoIva.SelectedItem?.ToString() ?? "GRAVADO",
             Activo = _chkActivo.Checked
         };
 

@@ -78,7 +78,7 @@ WHERE c.Activo = 1";
 
         using var command = connection.CreateCommand();
         command.CommandText = @"
-SELECT Id, Codigo, Nombre, Nit, IFNULL(Direccion, ''), IFNULL(Telefono, ''), IFNULL(Email, ''), TipoIva, Activo
+SELECT Id, Codigo, Nombre, Nit, IFNULL(Direccion, ''), IFNULL(Telefono, ''), IFNULL(Email, ''), Activo
 FROM Cliente
 WHERE (@search IS NULL OR trim(@search) = '' OR Nombre LIKE @filter OR Nit LIKE @filter OR Codigo LIKE @filter)
 ORDER BY Nombre;";
@@ -98,8 +98,7 @@ ORDER BY Nombre;";
                 Direccion = reader.GetString(4),
                 Telefono = reader.GetString(5),
                 Email = reader.GetString(6),
-                TipoIva = reader.GetString(7),
-                Activo = reader.GetInt64(8) == 1
+                Activo = reader.GetInt64(7) == 1
             });
         }
 
@@ -144,8 +143,8 @@ WHERE (Codigo = @codigo OR Nit = @nit)
 
         using var command = connection.CreateCommand();
         command.CommandText = @"
-INSERT INTO Cliente(Codigo, Nombre, Nit, Direccion, Telefono, Email, TipoIva, Activo)
-VALUES (@codigo, @nombre, @nit, @direccion, @telefono, @email, @tipoIva, @activo);";
+INSERT INTO Cliente(Codigo, Nombre, Nit, Direccion, Telefono, Email, Activo)
+VALUES (@codigo, @nombre, @nit, @direccion, @telefono, @email, @activo);";
 
         Bind(command, customer);
         command.ExecuteNonQuery();
@@ -158,7 +157,7 @@ VALUES (@codigo, @nombre, @nit, @direccion, @telefono, @email, @tipoIva, @activo
 
         using var command = connection.CreateCommand();
         command.CommandText = @"
-SELECT Id, Codigo, Nombre, Nit, IFNULL(Direccion, ''), IFNULL(Telefono, ''), IFNULL(Email, ''), TipoIva, Activo
+SELECT Id, Codigo, Nombre, Nit, IFNULL(Direccion, ''), IFNULL(Telefono, ''), IFNULL(Email, ''), Activo
 FROM Cliente
 WHERE Id = @id;";
         command.Parameters.AddWithValue("@id", id);
@@ -178,8 +177,7 @@ WHERE Id = @id;";
             Direccion = reader.GetString(4),
             Telefono = reader.GetString(5),
             Email = reader.GetString(6),
-            TipoIva = reader.GetString(7),
-            Activo = reader.GetInt64(8) == 1
+            Activo = reader.GetInt64(7) == 1
         };
     }
 
@@ -197,7 +195,6 @@ SET Codigo = @codigo,
     Direccion = @direccion,
     Telefono = @telefono,
     Email = @email,
-    TipoIva = @tipoIva,
     Activo = @activo
 WHERE Id = @id;";
 
@@ -214,7 +211,6 @@ WHERE Id = @id;";
         command.Parameters.AddWithValue("@direccion", customer.Direccion.Trim());
         command.Parameters.AddWithValue("@telefono", customer.Telefono.Trim());
         command.Parameters.AddWithValue("@email", customer.Email.Trim());
-        command.Parameters.AddWithValue("@tipoIva", customer.TipoIva.Trim());
         command.Parameters.AddWithValue("@activo", customer.Activo ? 1 : 0);
     }
 }

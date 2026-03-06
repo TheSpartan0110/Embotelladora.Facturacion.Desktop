@@ -36,7 +36,6 @@ public partial class Form1 : Form
     private Panel _inventarioView = null!;
     private Button _btnHeaderAction = null!;
     private Action? _headerAction;
-    private System.Windows.Forms.Timer? _moduleAnimationTimer;
 
     private Label _lblTotalFacturado = null!;
     private Label _lblSaldoPendiente = null!;
@@ -59,12 +58,9 @@ public partial class Form1 : Form
     private TextBox _txtItemDescription = null!;
     private NumericUpDown _numItemQuantity = null!;
     private NumericUpDown _numItemPrice = null!;
-    private CheckBox _chkItemIva = null!;
     private Label _lblInvoiceSubtotal = null!;
-    private Label _lblInvoiceIva = null!;
     private Label _lblInvoiceTotal = null!;
     private Label _lblItemStock = null!;
-    private decimal _currentIvaRate = 0.19m;
 
     // Payment module fields
     private DataGridView _gridPayments = null!;
@@ -406,7 +402,7 @@ public partial class Form1 : Form
             MultiSelect = false
         };
         ConfigureGridStyle(_gridInvoices);
-        tableCard.Controls.Add(_gridInvoices);
+        AddGridWithTopMargin(tableCard, _gridInvoices, 20);
 
         layout.Controls.Add(searchCard, 0, 0);
         layout.Controls.Add(tableCard, 0, 1);
@@ -632,7 +628,7 @@ public partial class Form1 : Form
         _gridCustomers.CellContentClick += OnCustomerGridCellContentClick;
         ConfigureGridStyle(_gridCustomers);
         _gridCustomers.DefaultCellStyle.Padding = new Padding(6, 8, 6, 8);
-        tableCard.Controls.Add(_gridCustomers);
+        AddGridWithTopMargin(tableCard, _gridCustomers, 20);
 
         layout.Controls.Add(searchCard, 0, 0);
         layout.Controls.Add(tableCard, 0, 1);
@@ -692,18 +688,21 @@ public partial class Form1 : Form
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
-        infoCard.Controls.Add(infoTitle);
 
         var infoGrid = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
-            RowCount = 2,
+            RowCount = 4,
             Margin = Padding.Empty,
             Padding = new Padding(0, 12, 0, 0)
         };
         infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         infoGrid.Height = 140;
 
         infoGrid.Controls.Add(new Label { Text = "Cliente *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
@@ -718,12 +717,11 @@ public partial class Form1 : Form
         _dtpInvoiceDate = new DateTimePicker { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short };
         infoGrid.Controls.Add(_dtpInvoiceDate, 0, 3);
 
-        infoGrid.Controls.Add(new Label { Text = "Tasa de IVA", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 1, 2);
-        var lblIvaRate = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI", 9), ForeColor = Color.DimGray };
-        lblIvaRate.Text = "IVA 19% (predeterminado)";
-        infoGrid.Controls.Add(lblIvaRate, 1, 3);
+        infoGrid.Controls.Add(new Label { Text = string.Empty, AutoSize = false, Height = 24 }, 1, 2);
+        infoGrid.Controls.Add(new Label { Text = string.Empty, AutoSize = false, Height = 24 }, 1, 3);
 
         infoCard.Controls.Add(infoGrid);
+        infoCard.Controls.Add(infoTitle);
         leftLayout.Controls.Add(infoCard, 0, 0);
 
         // 2. PRODUCTOS DE LA FACTURA
@@ -759,7 +757,6 @@ public partial class Form1 : Form
         productsTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         productsTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
 
-        var cmbProductLabel = new Label { Text = "Seleccionar producto", Font = new Font("Segoe UI", 9), TextAlign = ContentAlignment.MiddleLeft };
         _cmbItemProduct = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         _cmbItemProduct.SelectedIndexChanged += (_, _) => OnProductChanged();
         productsTopBar.Controls.Add(_cmbItemProduct, 0, 0);
@@ -801,18 +798,6 @@ public partial class Form1 : Form
         productEditForm.Controls.Add(_lblItemStock, 3, 1);
 
         productsCard.Controls.Add(productEditForm);
-
-        // Checkbox para IVA
-        _chkItemIva = new CheckBox
-        {
-            Text = "✓ Aplicar IVA",
-            Dock = DockStyle.Top,
-            Height = 24,
-            Checked = true,
-            Font = new Font("Segoe UI", 9),
-            Margin = new Padding(0, 0, 0, 8)
-        };
-        productsCard.Controls.Add(_chkItemIva);
 
         _gridInvoiceItems = new DataGridView
         {
@@ -861,7 +846,7 @@ public partial class Form1 : Form
             }
         };
 
-        productsCard.Controls.Add(_gridInvoiceItems);
+        AddGridWithTopMargin(productsCard, _gridInvoiceItems, 20);
 
         leftLayout.Controls.Add(productsCard, 0, 1);
 
@@ -940,38 +925,29 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
-            RowCount = 4,
+            RowCount = 3,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
-            Height = 220
+            Height = 170
         };
         summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
         summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
 
-        // Fila 1: Fecha
         summaryGrid.Controls.Add(new Label { Text = "📅 Fecha de Factura", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         var lblSummaryDate = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
         summaryGrid.Controls.Add(lblSummaryDate, 1, 0);
 
-        // Fila 2: Subtotal
         summaryGrid.Controls.Add(new Label { Text = "Subtotal", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
         _lblInvoiceSubtotal = new Label { Text = "$ 0", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
         summaryGrid.Controls.Add(_lblInvoiceSubtotal, 1, 1);
 
-        // Fila 3: IVA
-        summaryGrid.Controls.Add(new Label { Text = "IVA (19%)", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
-        _lblInvoiceIva = new Label { Text = "$ 0", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(_lblInvoiceIva, 1, 2);
-
-        // Fila 4: Total (separado con más altura)
         var totalLblRow = new Label { Text = "Total", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
-        summaryGrid.Controls.Add(totalLblRow, 0, 3);
-        _lblInvoiceTotal = new Label { Text = "$ 0", Font = new Font("Segoe UI", 16, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
-        summaryGrid.Controls.Add(_lblInvoiceTotal, 1, 3);
+        summaryGrid.Controls.Add(totalLblRow, 0, 2);
+        _lblInvoiceTotal = new Label { Text = "$ 0", Font = new Font("Segue UI", 16, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
+        summaryGrid.Controls.Add(_lblInvoiceTotal, 1, 2);
 
         summaryContentPanel.Controls.Add(summaryGrid);
 
@@ -1159,46 +1135,11 @@ public partial class Form1 : Form
 
     private void ShowAnimatedView(Panel targetView, Action loadAction)
     {
-        _moduleAnimationTimer?.Stop();
-        _moduleAnimationTimer?.Dispose();
-        _moduleAnimationTimer = null;
-
         _contentHost.Controls.Clear();
-        var hostSize = _contentHost.ClientSize;
-        if (hostSize.Width <= 0 || hostSize.Height <= 0)
-        {
-            targetView.Dock = DockStyle.Fill;
-            _contentHost.Controls.Add(targetView);
-            loadAction();
-            return;
-        }
-
-        targetView.Dock = DockStyle.None;
-        targetView.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        targetView.Bounds = new Rectangle(hostSize.Width, 0, hostSize.Width, hostSize.Height);
+        targetView.Dock = DockStyle.Fill;
+        targetView.Anchor = AnchorStyles.None;
         _contentHost.Controls.Add(targetView);
         loadAction();
-
-        _moduleAnimationTimer = new System.Windows.Forms.Timer { Interval = 12 };
-        _moduleAnimationTimer.Tick += (_, _) =>
-        {
-            var step = Math.Max(24, targetView.Left / 5);
-            var next = targetView.Left - step;
-            if (next <= 0)
-            {
-                targetView.Left = 0;
-                _moduleAnimationTimer?.Stop();
-                _moduleAnimationTimer?.Dispose();
-                _moduleAnimationTimer = null;
-
-                targetView.Anchor = AnchorStyles.None;
-                targetView.Dock = DockStyle.Fill;
-                return;
-            }
-
-            targetView.Left = next;
-        };
-        _moduleAnimationTimer.Start();
     }
 
     private void SetMenuSelection(string selected)
@@ -1265,6 +1206,25 @@ public partial class Form1 : Form
         return valueLabel;
     }
 
+    private static Panel CreateGridHost(Control grid, int topMargin = 20)
+    {
+        var host = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, topMargin, 0, 0),
+            Margin = Padding.Empty
+        };
+
+        grid.Dock = DockStyle.Fill;
+        host.Controls.Add(grid);
+        return host;
+    }
+
+    private static void AddGridWithTopMargin(Control container, DataGridView grid, int topMargin = 20)
+    {
+        container.Controls.Add(CreateGridHost(grid, topMargin));
+    }
+
     private static Panel CreateDataPanel(string title, out DataGridView grid)
     {
         var panel = new RoundedPanel
@@ -1281,7 +1241,8 @@ public partial class Form1 : Form
             Text = title,
             Dock = DockStyle.Top,
             Height = 32,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold)
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            BackColor = Color.White
         };
 
         grid = new DataGridView
@@ -1296,7 +1257,9 @@ public partial class Form1 : Form
             RowHeadersVisible = false
         };
 
-        panel.Controls.Add(grid);
+        var gridHost = CreateGridHost(grid, 20);
+
+        panel.Controls.Add(gridHost);
         panel.Controls.Add(label);
         return panel;
     }
@@ -1425,7 +1388,6 @@ public partial class Form1 : Form
         var draft = new CustomerDto
         {
             Codigo = _customerRepository.GenerateNextCode(),
-            TipoIva = "GRAVADO",
             Activo = true
         };
 
@@ -1509,7 +1471,6 @@ public partial class Form1 : Form
                 Direccion = customer.Direccion,
                 Telefono = customer.Telefono,
                 Email = customer.Email,
-                TipoIva = customer.TipoIva,
                 Activo = customer.Activo
             };
         }
@@ -1559,7 +1520,6 @@ public partial class Form1 : Form
         _cmbItemProduct.DisplayMember = nameof(ProductLookupDto.DisplayName);
         _cmbItemProduct.ValueMember = nameof(ProductLookupDto.Id);
 
-        _currentIvaRate = _invoiceRepository.GetIvaRate();
         LoadInvoicesList();
         ClearInvoiceForm();
     }
@@ -1633,7 +1593,6 @@ public partial class Form1 : Form
                 Descripcion = string.IsNullOrWhiteSpace(_txtItemDescription.Text) ? product.Nombre : _txtItemDescription.Text.Trim(),
                 Cantidad = quantity,
                 PrecioUnitario = price,
-                AplicaIva = _chkItemIva.Checked,
                 TotalLinea = total
             });
         }
@@ -1647,7 +1606,6 @@ public partial class Form1 : Form
         }
 
         RecalculateInvoiceTotals();
-        _gridInvoiceItems.Refresh();
     }
 
     private void RemoveInvoiceItem()
@@ -1659,7 +1617,7 @@ public partial class Form1 : Form
         }
     }
 
-    private (decimal subtotal, decimal iva, decimal total) ComputeInvoiceTotals()
+    private (decimal subtotal, decimal total) ComputeInvoiceTotals()
     {
         foreach (var item in _invoiceItems)
         {
@@ -1667,17 +1625,14 @@ public partial class Form1 : Form
         }
 
         var subtotal = _invoiceItems.Sum(x => x.TotalLinea);
-        var ivaBase = _invoiceItems.Where(x => x.AplicaIva).Sum(x => x.TotalLinea);
-        var iva = Math.Round(ivaBase * _currentIvaRate, 0);
-        var total = subtotal + iva;
-        return (subtotal, iva, total);
+        var total = subtotal;
+        return (subtotal, total);
     }
 
     private void RecalculateInvoiceTotals()
     {
         var totals = ComputeInvoiceTotals();
         _lblInvoiceSubtotal.Text = $"$ {totals.subtotal:N0}";
-        _lblInvoiceIva.Text = $"$ {totals.iva:N0}";
         _lblInvoiceTotal.Text = $"$ {totals.total:N0}";
         _gridInvoiceItems.Refresh();
         ConfigureInvoiceItemsColumns();
@@ -1712,10 +1667,6 @@ public partial class Form1 : Form
         _gridInvoiceItems.Columns["PrecioUnitario"]!.ReadOnly = false;
         _gridInvoiceItems.Columns["PrecioUnitario"]!.Width = 110;
         _gridInvoiceItems.Columns["PrecioUnitario"]!.DefaultCellStyle.Format = "C0";
-
-        _gridInvoiceItems.Columns["AplicaIva"]!.HeaderText = "¿IVA?";
-        _gridInvoiceItems.Columns["AplicaIva"]!.ReadOnly = false;
-        _gridInvoiceItems.Columns["AplicaIva"]!.Width = 60;
 
         _gridInvoiceItems.Columns["TotalLinea"]!.HeaderText = "Total";
         _gridInvoiceItems.Columns["TotalLinea"]!.ReadOnly = true;
@@ -1758,8 +1709,6 @@ public partial class Form1 : Form
             MetodoPagoId = methodId,
             Estado = "Enviada",
             Subtotal = totals.subtotal,
-            IvaPorcentaje = _currentIvaRate,
-            IvaValor = totals.iva,
             Retencion = 0,
             Total = totals.total,
             Saldo = totals.total,
@@ -1770,7 +1719,6 @@ public partial class Form1 : Form
                 Descripcion = x.Descripcion,
                 Cantidad = x.Cantidad,
                 PrecioUnitario = x.PrecioUnitario,
-                AplicaIva = x.AplicaIva,
                 TotalLinea = x.TotalLinea
             }).ToList()
         };
@@ -1814,7 +1762,6 @@ public partial class Form1 : Form
         }
 
         _numItemQuantity.Value = 1;
-        _chkItemIva.Checked = true;
         RecalculateInvoiceTotals();
     }
 
@@ -1969,7 +1916,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridPayments);
-        tableCard.Controls.Add(_gridPayments);
+        AddGridWithTopMargin(tableCard, _gridPayments, 20);
 
         layout.Controls.Add(filterCard, 0, 0);
         layout.Controls.Add(tableCard, 0, 1);
@@ -2025,18 +1972,26 @@ ORDER BY Faltante DESC;";
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
-        paymentCard.Controls.Add(paymentTitle);
 
         var paymentGrid = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 1,
-            RowCount = 7,
+            RowCount = 8,
             Margin = Padding.Empty,
             Padding = new Padding(0, 12, 0, 0),
             Height = 360
         };
         paymentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        paymentGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        paymentGrid.Margin = new Padding(0, 0, 0, 8);
 
         // Factura
         paymentGrid.Controls.Add(new Label { Text = "Factura *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
@@ -2059,8 +2014,6 @@ ORDER BY Faltante DESC;";
         _cmbPaymentMethod = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         paymentGrid.Controls.Add(_cmbPaymentMethod, 0, 7);
 
-        paymentCard.Controls.Add(paymentGrid);
-
         // Referencia y Notas
         var refNotesGrid = new TableLayoutPanel
         {
@@ -2081,6 +2034,9 @@ ORDER BY Faltante DESC;";
         refNotesGrid.Controls.Add(_txtPaymentNotes, 0, 3);
 
         paymentCard.Controls.Add(refNotesGrid);
+        paymentCard.Controls.Add(paymentGrid);
+        paymentCard.Controls.Add(paymentTitle);
+
         leftLayout.Controls.Add(paymentCard, 0, 0);
         mainLayout.Controls.Add(leftLayout, 0, 0);
 
@@ -2128,13 +2084,13 @@ ORDER BY Faltante DESC;";
             RowCount = 3,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
-            Height = 150
+            Height = 170
         };
         summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
         summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
 
         summaryGrid.Controls.Add(new Label { Text = "Factura:", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         var lblSummaryInvoice = new Label { Text = "-", Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
@@ -2398,7 +2354,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridFacturasPendientes);
-        facturasPendientesCard.Controls.Add(_gridFacturasPendientes);
+        AddGridWithTopMargin(facturasPendientesCard, _gridFacturasPendientes, 20);
 
         mainLayout.Controls.Add(facturasPendientesCard, 0, 1);
 
@@ -2442,7 +2398,7 @@ ORDER BY Faltante DESC;";
         _gridClientesSaldo.CellContentClick += OnCustomerGridCellContentClick;
         ConfigureGridStyle(_gridClientesSaldo);
         _gridClientesSaldo.DefaultCellStyle.Padding = new Padding(6, 8, 6, 8);
-        clientesSaldoCard.Controls.Add(_gridClientesSaldo);
+        AddGridWithTopMargin(clientesSaldoCard, _gridClientesSaldo, 20);
 
         mainLayout.Controls.Add(clientesSaldoCard, 0, 2);
 
@@ -2481,7 +2437,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridEdadSaldos);
-        edadSaldosCard.Controls.Add(_gridEdadSaldos);
+        AddGridWithTopMargin(edadSaldosCard, _gridEdadSaldos, 20);
 
         mainLayout.Controls.Add(edadSaldosCard, 0, 3);
 
@@ -2496,104 +2452,14 @@ ORDER BY Faltante DESC;";
         _lblCarteraTotalCobrar.Text = resumen.TotalPorCobrar.ToString("C0");
         _lblCarteraVencido.Text = resumen.SaldoVencido.ToString("C0");
 
-        // Cargar facturas pendientes
         var facturasPendientes = _carteraRepository.GetFacturasPendientes();
         _gridFacturasPendientes.DataSource = facturasPendientes;
 
-        if (_gridFacturasPendientes.Columns.Count > 0)
-        {
-            _gridFacturasPendientes.Columns["Id"]!.Visible = false;
-            _gridFacturasPendientes.Columns["Numero"]!.HeaderText = "N° Factura";
-            _gridFacturasPendientes.Columns["Numero"]!.Width = 120;
-            _gridFacturasPendientes.Columns["Fecha"]!.HeaderText = "Fecha";
-            _gridFacturasPendientes.Columns["Fecha"]!.Width = 100;
-            _gridFacturasPendientes.Columns["Cliente"]!.HeaderText = "Cliente";
-            _gridFacturasPendientes.Columns["Total"]!.HeaderText = "Total";
-            _gridFacturasPendientes.Columns["Total"]!.DefaultCellStyle.Format = "C0";
-            _gridFacturasPendientes.Columns["Saldo"]!.HeaderText = "Saldo";
-            _gridFacturasPendientes.Columns["Saldo"]!.DefaultCellStyle.Format = "C0";
-            _gridFacturasPendientes.Columns["Saldo"]!.Width = 110;
-            _gridFacturasPendientes.Columns["DiasTranscurridos"]!.HeaderText = "Días";
-            _gridFacturasPendientes.Columns["DiasTranscurridos"]!.Width = 60;
-            _gridFacturasPendientes.Columns["EstadoVencimiento"]!.HeaderText = "Estado";
-            _gridFacturasPendientes.Columns["EstadoVencimiento"]!.Width = 130;
-
-            // Colorear filas según vencimiento
-            foreach (DataGridViewRow row in _gridFacturasPendientes.Rows)
-            {
-                if (row.DataBoundItem is FacturaPendienteDto factura)
-                {
-                    if (factura.DiasTranscurridos > 90)
-                    {
-                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 220, 220);
-                    }
-                    else if (factura.DiasTranscurridos > 60)
-                    {
-                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 245, 230);
-                    }
-                    else if (factura.DiasTranscurridos > 30)
-                    {
-                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
-                    }
-                }
-            }
-        }
-
-        // Cargar clientes con saldo
         var clientesSaldo = _carteraRepository.GetClientesConSaldo();
         _gridClientesSaldo.DataSource = clientesSaldo;
 
-        if (_gridClientesSaldo.Columns.Count > 0)
-        {
-            _gridClientesSaldo.Columns["Id"]!.Visible = false;
-            _gridClientesSaldo.Columns["Codigo"]!.HeaderText = "Código";
-            _gridClientesSaldo.Columns["Codigo"]!.Width = 100;
-            _gridClientesSaldo.Columns["Nombre"]!.HeaderText = "Cliente";
-            _gridClientesSaldo.Columns["Telefono"]!.HeaderText = "Teléfono";
-            _gridClientesSaldo.Columns["Telefono"]!.Width = 120;
-            _gridClientesSaldo.Columns["FacturasPendientes"]!.HeaderText = "Facturas";
-            _gridClientesSaldo.Columns["FacturasPendientes"]!.Width = 90;
-            _gridClientesSaldo.Columns["SaldoTotal"]!.HeaderText = "Saldo Total";
-            _gridClientesSaldo.Columns["SaldoTotal"]!.DefaultCellStyle.Format = "C0";
-            _gridClientesSaldo.Columns["SaldoVencido"]!.HeaderText = "Saldo Vencido";
-            _gridClientesSaldo.Columns["SaldoVencido"]!.DefaultCellStyle.Format = "C0";
-            _gridClientesSaldo.Columns["SaldoVencido"]!.Width = 130;
-        }
-
-        // Cargar edad de saldos
         var edadSaldos = _carteraRepository.GetEdadSaldos();
         _gridEdadSaldos.DataSource = edadSaldos;
-
-        if (_gridEdadSaldos.Columns.Count > 0)
-        {
-            _gridEdadSaldos.Columns["RangoEdad"]!.HeaderText = "Rango de Edad";
-            _gridEdadSaldos.Columns["RangoEdad"]!.Width = 150;
-            _gridEdadSaldos.Columns["CantidadFacturas"]!.HeaderText = "Cantidad Facturas";
-            _gridEdadSaldos.Columns["CantidadFacturas"]!.Width = 150;
-            _gridEdadSaldos.Columns["TotalSaldo"]!.HeaderText = "Total Saldo";
-            _gridEdadSaldos.Columns["TotalSaldo"]!.DefaultCellStyle.Format = "C0";
-            
-            // Colorear según edad
-            foreach (DataGridViewRow row in _gridEdadSaldos.Rows)
-            {
-                if (row.DataBoundItem is EdadSaldoDto edad)
-                {
-                    if (edad.RangoEdad.Contains("90"))
-                    {
-                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 220, 220);
-                        row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-                    }
-                    else if (edad.RangoEdad.Contains("61-90"))
-                    {
-                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 245, 230);
-                    }
-                    else if (edad.RangoEdad.Contains("31-60"))
-                    {
-                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
-                    }
-                }
-            }
-        }
     }
 
     private Panel BuildBalanceView()
@@ -2632,7 +2498,7 @@ ORDER BY Faltante DESC;";
         cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
         cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
 
-        _lblBalanceFacturado = CreateCard(cardsPanel, 0, "Total Facturado", out var lblFacturasEmitidas);
+        _lblBalanceFacturado = CreateCard(cardsPanel, 0, "Total Facturado", out _);
         _lblBalanceRecaudado = CreateCard(cardsPanel, 1, "Total Recaudado", out _);
         _lblBalanceCuentasPorCobrar = CreateCard(cardsPanel, 2, "Cuentas por Cobrar", out _);
         _lblBalanceNeto = CreateCard(cardsPanel, 3, "Balance Neto", out _);
@@ -2685,7 +2551,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridBalanceMensual);
-        balanceMensualCard.Controls.Add(_gridBalanceMensual);
+        AddGridWithTopMargin(balanceMensualCard, _gridBalanceMensual, 20);
 
         analyticsLayout.Controls.Add(balanceMensualCard, 0, 0);
 
@@ -2723,7 +2589,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridTopClientes);
-        topClientesCard.Controls.Add(_gridTopClientes);
+        AddGridWithTopMargin(topClientesCard, _gridTopClientes, 20);
 
         analyticsLayout.Controls.Add(topClientesCard, 1, 0);
 
@@ -2823,7 +2689,6 @@ ORDER BY Faltante DESC;";
             _gridTopClientes.Columns["NumeroFacturas"]!.Width = 80;
             _gridTopClientes.Columns["TotalFacturado"]!.HeaderText = "Total";
             _gridTopClientes.Columns["TotalFacturado"]!.DefaultCellStyle.Format = "C0";
-            _gridTopClientes.Columns["TotalFacturado"]!.Width = 110;
             _gridTopClientes.Columns["SaldoPendiente"]!.HeaderText = "Saldo";
             _gridTopClientes.Columns["SaldoPendiente"]!.DefaultCellStyle.Format = "C0";
             _gridTopClientes.Columns["SaldoPendiente"]!.Width = 110;
@@ -2986,7 +2851,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridProductosInventario);
-        productosCard.Controls.Add(_gridProductosInventario);
+        AddGridWithTopMargin(productosCard, _gridProductosInventario, 20);
 
         contentLayout.Controls.Add(productosCard, 0, 0);
 
@@ -3024,7 +2889,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridMovimientos);
-        movimientosCard.Controls.Add(_gridMovimientos);
+        AddGridWithTopMargin(movimientosCard, _gridMovimientos, 20);
 
         contentLayout.Controls.Add(movimientosCard, 1, 0);
 
@@ -3065,7 +2930,7 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridStockBajo);
-        stockBajoCard.Controls.Add(_gridStockBajo);
+        AddGridWithTopMargin(stockBajoCard, _gridStockBajo, 20);
 
         mainLayout.Controls.Add(stockBajoCard, 0, 3);
 
@@ -3100,15 +2965,15 @@ ORDER BY Faltante DESC;";
             _gridProductosInventario.Columns["Unidad"]!.Width = 120;
             _gridProductosInventario.Columns["StockActual"]!.HeaderText = "Stock";
             _gridProductosInventario.Columns["StockActual"]!.DefaultCellStyle.Format = "N0";
-            _gridProductosInventario.Columns["StockActual"]!.Width = 80;
-            _gridProductosInventario.Columns["StockMinimo"]!.HeaderText = "Mínimo";
+            _gridProductosInventario.Columns["StockActual"]!.Width = 100;
+            _gridProductosInventario.Columns["StockMinimo"]!.HeaderText = "Stock Mínimo";
             _gridProductosInventario.Columns["StockMinimo"]!.DefaultCellStyle.Format = "N0";
-            _gridProductosInventario.Columns["StockMinimo"]!.Width = 80;
+            _gridProductosInventario.Columns["StockMinimo"]!.Width = 110;
             _gridProductosInventario.Columns["PrecioBase"]!.HeaderText = "Precio";
             _gridProductosInventario.Columns["PrecioBase"]!.DefaultCellStyle.Format = "C0";
             _gridProductosInventario.Columns["ValorStock"]!.HeaderText = "Valor Stock";
             _gridProductosInventario.Columns["ValorStock"]!.DefaultCellStyle.Format = "C0";
-            _gridProductosInventario.Columns["ValorStock"]!.Width = 110;
+            _gridProductosInventario.Columns["ValorStock"]!.Width = 120;
             _gridProductosInventario.Columns["EstadoStock"]!.HeaderText = "Estado";
             _gridProductosInventario.Columns["EstadoStock"]!.Width = 90;
 
@@ -3124,7 +2989,7 @@ ORDER BY Faltante DESC;";
                             row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
                             break;
                         case "Bajo":
-                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 245, 230);
+                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 240, 230);
                             break;
                         case "Medio":
                             row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
@@ -3231,7 +3096,6 @@ ORDER BY Faltante DESC;";
         public string Descripcion { get; set; } = string.Empty;
         public decimal Cantidad { get; set; }
         public decimal PrecioUnitario { get; set; }
-        public bool AplicaIva { get; set; }
         public decimal TotalLinea { get; set; }
     }
 }

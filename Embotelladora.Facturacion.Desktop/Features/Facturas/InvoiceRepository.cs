@@ -26,18 +26,6 @@ WHERE Numero LIKE 'FAC-%';";
         return InvoiceNumberExists(connection, null, invoiceNumber);
     }
 
-    public decimal GetIvaRate()
-    {
-        using var connection = AppDatabase.CreateConnection();
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT IFNULL(Valor, 0.19) FROM ParametroIva WHERE Nombre = 'IVA_GENERAL' AND Activo = 1 LIMIT 1;";
-        var result = command.ExecuteScalar();
-
-        return Convert.ToDecimal(result);
-    }
-
     public List<InvoiceCustomerLookupDto> GetActiveCustomers()
     {
         var result = new List<InvoiceCustomerLookupDto>();
@@ -221,8 +209,8 @@ LIMIT @limit;";
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = @"
-INSERT INTO Factura(Numero, Fecha, ClienteId, MetodoPagoId, Estado, Subtotal, IvaPorcentaje, IvaValor, Retencion, Total, Saldo, Notas)
-VALUES(@numero, @fecha, @clienteId, @metodoPagoId, @estado, @subtotal, @ivaPorcentaje, @ivaValor, @retencion, @total, @saldo, @notas);
+INSERT INTO Factura(Numero, Fecha, ClienteId, MetodoPagoId, Estado, Subtotal, Retencion, Total, Saldo, Notas)
+VALUES(@numero, @fecha, @clienteId, @metodoPagoId, @estado, @subtotal, @retencion, @total, @saldo, @notas);
 SELECT last_insert_rowid();";
 
         command.Parameters.AddWithValue("@numero", request.Numero);
@@ -231,8 +219,6 @@ SELECT last_insert_rowid();";
         command.Parameters.AddWithValue("@metodoPagoId", request.MetodoPagoId);
         command.Parameters.AddWithValue("@estado", request.Estado);
         command.Parameters.AddWithValue("@subtotal", request.Subtotal);
-        command.Parameters.AddWithValue("@ivaPorcentaje", request.IvaPorcentaje);
-        command.Parameters.AddWithValue("@ivaValor", request.IvaValor);
         command.Parameters.AddWithValue("@retencion", request.Retencion);
         command.Parameters.AddWithValue("@total", request.Total);
         command.Parameters.AddWithValue("@saldo", request.Saldo);
@@ -246,15 +232,14 @@ SELECT last_insert_rowid();";
             using var itemCommand = connection.CreateCommand();
             itemCommand.Transaction = transaction;
             itemCommand.CommandText = @"
-INSERT INTO ItemFactura(FacturaId, ProductoId, Descripcion, Cantidad, PrecioUnitario, AplicaIva, TotalLinea)
-VALUES(@facturaId, @productoId, @descripcion, @cantidad, @precioUnitario, @aplicaIva, @totalLinea);";
+INSERT INTO ItemFactura(FacturaId, ProductoId, Descripcion, Cantidad, PrecioUnitario, TotalLinea)
+VALUES(@facturaId, @productoId, @descripcion, @cantidad, @precioUnitario, @totalLinea);";
 
             itemCommand.Parameters.AddWithValue("@facturaId", invoiceId);
             itemCommand.Parameters.AddWithValue("@productoId", item.ProductId);
             itemCommand.Parameters.AddWithValue("@descripcion", item.Descripcion);
             itemCommand.Parameters.AddWithValue("@cantidad", item.Cantidad);
             itemCommand.Parameters.AddWithValue("@precioUnitario", item.PrecioUnitario);
-            itemCommand.Parameters.AddWithValue("@aplicaIva", item.AplicaIva ? 1 : 0);
             itemCommand.Parameters.AddWithValue("@totalLinea", item.TotalLinea);
             itemCommand.ExecuteNonQuery();
 
@@ -295,7 +280,7 @@ FROM Factura WHERE Id = @id;";
 
         // Get items
         using var itemCommand = connection.CreateCommand();
-        itemCommand.CommandText = @"SELECT Id, Descripcion, Cantidad, Precio, Iva 
+        itemCommand.CommandText = @"SELECT Id, Descripcion, Cantidad, Precio 
 FROM FacturaDetalle WHERE FacturaId = @id;";
         itemCommand.Parameters.AddWithValue("@id", id);
 
@@ -307,8 +292,7 @@ FROM FacturaDetalle WHERE FacturaId = @id;";
                 Id = itemReader.GetInt64(0),
                 Descripcion = itemReader.GetString(1),
                 Cantidad = Convert.ToDecimal(itemReader.GetDouble(2)),
-                Precio = Convert.ToDecimal(itemReader.GetDouble(3)),
-                Iva = Convert.ToDecimal(itemReader.GetDouble(4))
+                Precio = Convert.ToDecimal(itemReader.GetDouble(3))
             });
         }
 
@@ -323,7 +307,7 @@ FROM FacturaDetalle WHERE FacturaId = @id;";
         using var command = connection.CreateCommand();
         var numero = GenerateNextInvoiceNumber();
         var fecha = invoice.Fecha.ToString("yyyy-MM-dd");
-        var total = invoice.Items.Sum(i => i.Subtotal + i.Iva);
+        var total = invoice.Items.Sum(i => i.Subtotal);
         var saldo = total;
 
         command.CommandText = @"INSERT INTO Factura (Numero, ClienteId, MetodoPagoId, Fecha, Total, Saldo, Estado, Notas)
@@ -348,14 +332,13 @@ VALUES (@numero, @clienteId, @metodoPagoId, @fecha, @total, @saldo, 'Enviada', @
         foreach (var item in invoice.Items)
         {
             using var itemCommand = connection.CreateCommand();
-            itemCommand.CommandText = @"INSERT INTO FacturaDetalle (FacturaId, Descripcion, Cantidad, Precio, Iva)
-VALUES (@facturaId, @descripcion, @cantidad, @precio, @iva);";
+            itemCommand.CommandText = @"INSERT INTO FacturaDetalle (FacturaId, Descripcion, Cantidad, Precio)
+VALUES (@facturaId, @descripcion, @cantidad, @precio);";
 
             itemCommand.Parameters.AddWithValue("@facturaId", invoiceId);
             itemCommand.Parameters.AddWithValue("@descripcion", item.Descripcion);
             itemCommand.Parameters.AddWithValue("@cantidad", item.Cantidad);
             itemCommand.Parameters.AddWithValue("@precio", item.Precio);
-            itemCommand.Parameters.AddWithValue("@iva", item.Iva);
 
             itemCommand.ExecuteNonQuery();
         }

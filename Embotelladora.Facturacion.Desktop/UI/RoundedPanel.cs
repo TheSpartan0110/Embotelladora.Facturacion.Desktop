@@ -42,7 +42,7 @@ internal sealed class RoundedPanel : Panel
 
         if (BorderStyle != BorderStyle.None)
         {
-            using var pen = new Pen(BorderColor, 1);
+            using var pen = new Pen(BorderColor, 2);
             e.Graphics.DrawPath(pen, path);
         }
 

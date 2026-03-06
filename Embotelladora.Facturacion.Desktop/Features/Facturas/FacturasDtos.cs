@@ -7,7 +7,6 @@ internal sealed class InvoiceItemDetail
     public string Descripcion { get; set; } = string.Empty;
     public decimal Cantidad { get; set; }
     public decimal Precio { get; set; }
-    public decimal Iva { get; set; }
     public decimal Subtotal => Cantidad * Precio;
 
     public InvoiceItemDetail Clone() => new()
@@ -15,8 +14,7 @@ internal sealed class InvoiceItemDetail
         Id = Id,
         Descripcion = Descripcion,
         Cantidad = Cantidad,
-        Precio = Precio,
-        Iva = Iva
+        Precio = Precio
     };
 }
 
@@ -146,8 +144,6 @@ internal sealed class InvoiceCreateRequest
     public long MetodoPagoId { get; set; }
     public string Estado { get; set; } = string.Empty;
     public decimal Subtotal { get; set; }
-    public decimal IvaPorcentaje { get; set; }
-    public decimal IvaValor { get; set; }
     public decimal Retencion { get; set; }
     public decimal Total { get; set; }
     public decimal Saldo { get; set; }
@@ -161,7 +157,6 @@ internal sealed class InvoiceItemInput
     public string Descripcion { get; set; } = string.Empty;
     public decimal Cantidad { get; set; }
     public decimal PrecioUnitario { get; set; }
-    public bool AplicaIva { get; set; }
     public decimal TotalLinea { get; set; }
 }
 
