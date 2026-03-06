@@ -90,12 +90,16 @@ public partial class Form1 : Form
     private Label _lblBalanceCuentasPorCobrar = null!;
     private Label _lblBalanceNeto = null!;
     private DataGridView _gridBalanceMensual = null!;
-    private DataGridView _gridTopClientes = null!;
+    private DataGridView _gridBalanceFacturas = null!;
+    private DataGridView _gridBalancePagos = null!;
     private Label _lblBalanceDetalleTitulo = null!;
-    private Label _lblBalanceTopClientesTitulo = null!;
+    private Label _lblBalanceFacturasTitulo = null!;
+    private Label _lblBalancePagosTitulo = null!;
     private Label _lblBalanceInfo = null!;
+    private DateTimePicker _dtpBalanceFecha = null!;
     private readonly Dictionary<BalancePeriodo, Button> _balancePeriodButtons = [];
     private BalancePeriodo _balancePeriodoSeleccionado = BalancePeriodo.Mensual;
+    private DateTime? _balanceFechaEspecifica;
 
     // Inventario module fields
     private Label _lblInventarioTotalProductos = null!;
@@ -1141,6 +1145,9 @@ public partial class Form1 : Form
         {
             _headerTitle.Text = "Balance";
             _headerSubtitle.Text = "Análisis financiero y rentabilidad";
+            _btnHeaderAction.Text = "🖨 Imprimir";
+            _btnHeaderAction.Visible = true;
+            _headerAction = PrintBalance;
             ShowAnimatedView(_balanceView, LoadBalance);
             return;
         }
@@ -2514,9 +2521,9 @@ ORDER BY Faltante DESC;";
             Padding = Padding.Empty
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 120));
         view.Controls.Add(mainLayout);
 
         // 1. TARJETAS DE RESUMEN
@@ -2543,7 +2550,7 @@ ORDER BY Faltante DESC;";
         // 2. NAVEGADOR DE PERÍODOS
         mainLayout.Controls.Add(BuildBalancePeriodNavigator(), 0, 1);
 
-        // 3. BALANCE DETALLE Y TOP CLIENTES
+        // 3. BALANCE DETALLE Y FACTURAS/PAGOS
         var analyticsLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -2552,8 +2559,8 @@ ORDER BY Faltante DESC;";
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
 
         var balanceMensualCard = new RoundedPanel
         {
@@ -2562,7 +2569,7 @@ ORDER BY Faltante DESC;";
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
             Padding = new Padding(16),
-            Margin = new Padding(0, 0, 6, 12)
+            Margin = new Padding(0, 0, 6, 0)
         };
 
         _lblBalanceDetalleTitulo = new Label
@@ -2589,31 +2596,45 @@ ORDER BY Faltante DESC;";
             MultiSelect = false
         };
         ConfigureGridStyle(_gridBalanceMensual);
+        _gridBalanceMensual.SelectionChanged += (_, _) => OnBalanceDetalleSelected();
         AddGridWithTopMargin(balanceMensualCard, _gridBalanceMensual, 20);
 
         analyticsLayout.Controls.Add(balanceMensualCard, 0, 0);
 
-        var topClientesCard = new RoundedPanel
+        // Panel derecho: Facturas del período + Pagos de factura seleccionada
+        var rightSplit = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = new Padding(6, 0, 0, 0),
+            Padding = Padding.Empty
+        };
+        rightSplit.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        rightSplit.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+
+        // Facturas del período
+        var facturasCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.White,
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
             Padding = new Padding(16),
-            Margin = new Padding(6, 0, 0, 12)
+            Margin = new Padding(0, 0, 0, 6)
         };
 
-        _lblBalanceTopClientesTitulo = new Label
+        _lblBalanceFacturasTitulo = new Label
         {
-            Text = "🏆 Top 10 Clientes",
+            Text = "📄 Facturas del Período",
             Dock = DockStyle.Top,
             Height = 32,
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
-        topClientesCard.Controls.Add(_lblBalanceTopClientesTitulo);
+        facturasCard.Controls.Add(_lblBalanceFacturasTitulo);
 
-        _gridTopClientes = new DataGridView
+        _gridBalanceFacturas = new DataGridView
         {
             Dock = DockStyle.Fill,
             ReadOnly = true,
@@ -2626,10 +2647,51 @@ ORDER BY Faltante DESC;";
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false
         };
-        ConfigureGridStyle(_gridTopClientes);
-        AddGridWithTopMargin(topClientesCard, _gridTopClientes, 20);
+        ConfigureGridStyle(_gridBalanceFacturas);
+        _gridBalanceFacturas.SelectionChanged += (_, _) => OnBalanceFacturaSelected();
+        AddGridWithTopMargin(facturasCard, _gridBalanceFacturas, 20);
 
-        analyticsLayout.Controls.Add(topClientesCard, 1, 0);
+        rightSplit.Controls.Add(facturasCard, 0, 0);
+
+        // Pagos de la factura seleccionada
+        var pagosCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(0, 6, 0, 0)
+        };
+
+        _lblBalancePagosTitulo = new Label
+        {
+            Text = "💰 Pagos de Factura",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        pagosCard.Controls.Add(_lblBalancePagosTitulo);
+
+        _gridBalancePagos = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridBalancePagos);
+        AddGridWithTopMargin(pagosCard, _gridBalancePagos, 20);
+
+        rightSplit.Controls.Add(pagosCard, 0, 1);
+        analyticsLayout.Controls.Add(rightSplit, 1, 0);
 
         mainLayout.Controls.Add(analyticsLayout, 0, 2);
 
@@ -2640,16 +2702,16 @@ ORDER BY Faltante DESC;";
             BackColor = Color.White,
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
-            Padding = new Padding(16),
-            Margin = Padding.Empty
+            Padding = new Padding(14, 10, 14, 10),
+            Margin = new Padding(0, 8, 0, 0)
         };
 
         var infoTitle = new Label
         {
             Text = "📊 Indicadores Clave del Período",
             Dock = DockStyle.Top,
-            Height = 32,
-            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            Height = 24,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
         infoCard.Controls.Add(infoTitle);
@@ -2657,13 +2719,13 @@ ORDER BY Faltante DESC;";
         var infoPanel = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 12, 0, 0)
+            Padding = new Padding(0, 4, 0, 0)
         };
 
         _lblBalanceInfo = new Label
         {
             Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 10),
+            Font = new Font("Segoe UI", 9),
             ForeColor = Color.FromArgb(90, 90, 90),
             Text = "Cargando indicadores..."
         };
@@ -2685,8 +2747,8 @@ ORDER BY Faltante DESC;";
             BackColor = Color.White,
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
-            Padding = new Padding(12),
-            Margin = new Padding(0, 0, 0, 12)
+            Padding = new Padding(8, 6, 8, 6),
+            Margin = new Padding(0, 0, 0, 8)
         };
 
         var flow = new FlowLayoutPanel
@@ -2694,7 +2756,7 @@ ORDER BY Faltante DESC;";
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            AutoScroll = true,
+            AutoScroll = false,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
@@ -2705,6 +2767,41 @@ ORDER BY Faltante DESC;";
         AddBalancePeriodButton(flow, "Anual", BalancePeriodo.Anual);
         AddBalancePeriodButton(flow, "Total", BalancePeriodo.Total);
 
+        var separator = new Label
+        {
+            Text = "|",
+            Width = 16,
+            Height = 32,
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(200, 200, 200),
+            Font = new Font("Segoe UI", 10),
+            Margin = new Padding(2, 0, 2, 0)
+        };
+        flow.Controls.Add(separator);
+
+        var lblFecha = new Label
+        {
+            Text = "Día:",
+            Width = 32,
+            Height = 32,
+            TextAlign = ContentAlignment.MiddleRight,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = Color.FromArgb(45, 55, 45),
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        flow.Controls.Add(lblFecha);
+
+        _dtpBalanceFecha = new DateTimePicker
+        {
+            Width = 130,
+            Format = DateTimePickerFormat.Short,
+            Value = DateTime.Today,
+            Font = new Font("Segoe UI", 9),
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        _dtpBalanceFecha.ValueChanged += (_, _) => OnBalanceFechaChanged();
+        flow.Controls.Add(_dtpBalanceFecha);
+
         card.Controls.Add(flow);
         return card;
     }
@@ -2714,13 +2811,13 @@ ORDER BY Faltante DESC;";
         var button = new Button
         {
             Text = text,
-            Width = 120,
-            Height = 34,
+            Width = 90,
+            Height = 32,
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.White,
             ForeColor = Color.FromArgb(45, 55, 45),
             Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            Margin = new Padding(0, 0, 8, 0),
+            Margin = new Padding(0, 0, 6, 0),
             Cursor = Cursors.Hand
         };
 
@@ -2737,6 +2834,7 @@ ORDER BY Faltante DESC;";
     private void SetBalancePeriod(BalancePeriodo periodo, bool reload)
     {
         _balancePeriodoSeleccionado = periodo;
+        _balanceFechaEspecifica = null;
 
         foreach (var (key, button) in _balancePeriodButtons)
         {
@@ -2754,18 +2852,43 @@ ORDER BY Faltante DESC;";
 
     private void LoadBalance()
     {
-        var resumen = _balanceRepository.GetResumen(_balancePeriodoSeleccionado);
+        BalanceResumenDto resumen;
+        List<BalanceFacturaDto> facturas;
+        List<BalanceMensualDto> balanceDetalle;
+        string detalleTitulo;
+        string facturasTitulo;
+        string periodoNombre;
+
+        if (_balanceFechaEspecifica is { } fecha)
+        {
+            resumen = _balanceRepository.GetResumen(fecha);
+            facturas = _balanceRepository.GetFacturas(fecha);
+            balanceDetalle = _balanceRepository.GetBalanceDetalleFecha(fecha);
+            var fechaStr = fecha.ToString("dd/MM/yyyy");
+            detalleTitulo = $"📈 Balance — Semana del {fechaStr}";
+            facturasTitulo = $"📄 Facturas del {fechaStr}";
+            periodoNombre = fechaStr;
+        }
+        else
+        {
+            resumen = _balanceRepository.GetResumen(_balancePeriodoSeleccionado);
+            facturas = _balanceRepository.GetFacturas(_balancePeriodoSeleccionado);
+            balanceDetalle = _balanceRepository.GetBalanceDetalle(_balancePeriodoSeleccionado);
+            detalleTitulo = GetBalanceDetalleTitle(_balancePeriodoSeleccionado);
+            facturasTitulo = $"📄 Facturas ({GetBalancePeriodName(_balancePeriodoSeleccionado)})";
+            periodoNombre = GetBalancePeriodName(_balancePeriodoSeleccionado);
+        }
+
         _lblBalanceFacturado.Text = resumen.TotalFacturado.ToString("C0");
         _lblBalanceRecaudado.Text = resumen.TotalRecaudado.ToString("C0");
         _lblBalanceCuentasPorCobrar.Text = resumen.CuentasPorCobrar.ToString("C0");
         _lblBalanceNeto.Text = resumen.BalanceNeto.ToString("C0");
 
-        _lblBalanceDetalleTitulo.Text = GetBalanceDetalleTitle(_balancePeriodoSeleccionado);
-        _lblBalanceTopClientesTitulo.Text = $"🏆 Top 10 Clientes ({GetBalancePeriodName(_balancePeriodoSeleccionado)})";
+        _lblBalanceDetalleTitulo.Text = detalleTitulo;
+        _lblBalanceFacturasTitulo.Text = facturasTitulo;
 
-        // Cargar detalle de balance por período
-        var balanceMensual = _balanceRepository.GetBalanceDetalle(_balancePeriodoSeleccionado);
-        _gridBalanceMensual.DataSource = balanceMensual;
+        // Cargar detalle de balance
+        _gridBalanceMensual.DataSource = balanceDetalle;
 
         if (_gridBalanceMensual.Columns.Count > 0)
         {
@@ -2779,7 +2902,7 @@ ORDER BY Faltante DESC;";
             _gridBalanceMensual.Columns["NumeroFacturas"]!.HeaderText = "N° Facturas";
             _gridBalanceMensual.Columns["NumeroFacturas"]!.Width = 110;
 
-            var ultimoPeriodo = balanceMensual.LastOrDefault()?.Periodo;
+            var ultimoPeriodo = balanceDetalle.LastOrDefault()?.Periodo;
             if (!string.IsNullOrWhiteSpace(ultimoPeriodo))
             {
                 foreach (DataGridViewRow row in _gridBalanceMensual.Rows)
@@ -2793,50 +2916,201 @@ ORDER BY Faltante DESC;";
             }
         }
 
-        // Cargar top clientes del período
-        var topClientes = _balanceRepository.GetTopClientes(10, _balancePeriodoSeleccionado);
-        _gridTopClientes.DataSource = topClientes;
+        // Limpiar pagos antes de cargar facturas
+        _gridBalancePagos.DataSource = null;
+        _lblBalancePagosTitulo.Text = "💰 Pagos de Factura";
 
-        if (_gridTopClientes.Columns.Count > 0)
-        {
-            _gridTopClientes.Columns["Id"]!.Visible = false;
-            _gridTopClientes.Columns["Codigo"]!.HeaderText = "Código";
-            _gridTopClientes.Columns["Codigo"]!.Width = 80;
-            _gridTopClientes.Columns["Nombre"]!.HeaderText = "Cliente";
-            _gridTopClientes.Columns["NumeroFacturas"]!.HeaderText = "Facturas";
-            _gridTopClientes.Columns["NumeroFacturas"]!.Width = 80;
-            _gridTopClientes.Columns["TotalFacturado"]!.HeaderText = "Total";
-            _gridTopClientes.Columns["TotalFacturado"]!.DefaultCellStyle.Format = "C0";
-            _gridTopClientes.Columns["SaldoPendiente"]!.HeaderText = "Saldo";
-            _gridTopClientes.Columns["SaldoPendiente"]!.DefaultCellStyle.Format = "C0";
-            _gridTopClientes.Columns["SaldoPendiente"]!.Width = 110;
-            _gridTopClientes.Columns["PorcentajeTotal"]!.HeaderText = "%";
-            _gridTopClientes.Columns["PorcentajeTotal"]!.DefaultCellStyle.Format = "N2";
-            _gridTopClientes.Columns["PorcentajeTotal"]!.Width = 60;
-
-            for (int i = 0; i < Math.Min(3, _gridTopClientes.Rows.Count); i++)
-            {
-                var row = _gridTopClientes.Rows[i];
-                row.DefaultCellStyle.BackColor = i switch
-                {
-                    0 => Color.FromArgb(255, 248, 220),
-                    1 => Color.FromArgb(240, 240, 240),
-                    2 => Color.FromArgb(255, 239, 213),
-                    _ => Color.White
-                };
-                row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-            }
-        }
+        // Cargar facturas del período
+        _gridBalanceFacturas.DataSource = facturas;
+        ConfigureBalanceFacturasGrid();
+        SelectFirstBalanceFactura();
 
         var promedioFactura = resumen.FacturasEmitidas > 0
             ? resumen.TotalFacturado / resumen.FacturasEmitidas
             : 0m;
 
         _lblBalanceInfo.Text =
-            $"Período seleccionado: {GetBalancePeriodName(_balancePeriodoSeleccionado)}\n" +
+            $"Período seleccionado: {periodoNombre}\n" +
             $"Facturas emitidas: {resumen.FacturasEmitidas:N0}\n" +
             $"Promedio por factura: {promedioFactura:C0}\n" +
             $"Recaudo sobre facturación: {(resumen.TotalFacturado <= 0 ? 0 : (resumen.TotalRecaudado / resumen.TotalFacturado) * 100):N2}%";
+    }
+
+    private void OnBalanceFechaChanged()
+    {
+        _balanceFechaEspecifica = _dtpBalanceFecha.Value.Date;
+
+        foreach (var (_, button) in _balancePeriodButtons)
+        {
+            button.BackColor = Color.White;
+            button.ForeColor = Color.FromArgb(45, 55, 45);
+            button.FlatAppearance.BorderColor = Color.FromArgb(214, 218, 210);
+        }
+
+        LoadBalance();
+    }
+
+    private void OnBalanceDetalleSelected()
+    {
+        if (_gridBalanceMensual.CurrentRow?.DataBoundItem is not BalanceMensualDto detalle)
+        {
+            return;
+        }
+
+        if (!TryParsePeriodoRange(detalle.Periodo, out var inicio, out var fin))
+        {
+            return;
+        }
+
+        _gridBalancePagos.DataSource = null;
+        _lblBalancePagosTitulo.Text = "💰 Pagos de Factura";
+
+        var facturas = inicio == fin
+            ? _balanceRepository.GetFacturas(inicio)
+            : _balanceRepository.GetFacturas(inicio, fin);
+
+        _lblBalanceFacturasTitulo.Text = $"📄 Facturas — {detalle.MesNombre}";
+        _gridBalanceFacturas.DataSource = facturas;
+        ConfigureBalanceFacturasGrid();
+        SelectFirstBalanceFactura();
+    }
+
+    private static bool TryParsePeriodoRange(string periodo, out DateTime inicio, out DateTime fin)
+    {
+        inicio = default;
+        fin = default;
+
+        // yyyy-MM-dd (día)
+        if (DateTime.TryParseExact(periodo, "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var fecha))
+        {
+            inicio = fecha;
+            fin = fecha;
+            return true;
+        }
+
+        // yyyy-MM-Q1 o yyyy-MM-Q2 (quincena)
+        var qIndex = periodo.IndexOf("-Q");
+        if (qIndex == 7 && periodo.Length > 8)
+        {
+            var yearMonthPart = periodo[..7];
+            var qNumber = periodo[(qIndex + 2)..];
+            if (DateTime.TryParseExact(yearMonthPart, "yyyy-MM",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var mesQ))
+            {
+                if (qNumber == "1")
+                {
+                    inicio = new DateTime(mesQ.Year, mesQ.Month, 1);
+                    fin = new DateTime(mesQ.Year, mesQ.Month, 15);
+                    return true;
+                }
+
+                if (qNumber == "2")
+                {
+                    inicio = new DateTime(mesQ.Year, mesQ.Month, 16);
+                    fin = new DateTime(mesQ.Year, mesQ.Month, DateTime.DaysInMonth(mesQ.Year, mesQ.Month));
+                    return true;
+                }
+            }
+        }
+
+        // yyyy-MM (mes)
+        if (DateTime.TryParseExact(periodo, "yyyy-MM",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var mes))
+        {
+            inicio = new DateTime(mes.Year, mes.Month, 1);
+            fin = new DateTime(mes.Year, mes.Month, DateTime.DaysInMonth(mes.Year, mes.Month));
+            return true;
+        }
+
+        // yyyy (año)
+        if (periodo.Length == 4 && int.TryParse(periodo, out var anio) && anio is >= 2000 and <= 2100)
+        {
+            inicio = new DateTime(anio, 1, 1);
+            fin = new DateTime(anio, 12, 31);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void ConfigureBalanceFacturasGrid()
+    {
+        if (_gridBalanceFacturas.Columns.Count == 0)
+        {
+            return;
+        }
+
+        _gridBalanceFacturas.Columns["Id"]!.Visible = false;
+        _gridBalanceFacturas.Columns["Numero"]!.HeaderText = "N° Factura";
+        _gridBalanceFacturas.Columns["Numero"]!.Width = 100;
+        _gridBalanceFacturas.Columns["Fecha"]!.HeaderText = "Fecha";
+        _gridBalanceFacturas.Columns["Fecha"]!.Width = 90;
+        _gridBalanceFacturas.Columns["Cliente"]!.HeaderText = "Cliente";
+        _gridBalanceFacturas.Columns["Total"]!.HeaderText = "Total";
+        _gridBalanceFacturas.Columns["Total"]!.DefaultCellStyle.Format = "C0";
+        _gridBalanceFacturas.Columns["Total"]!.Width = 100;
+        _gridBalanceFacturas.Columns["Saldo"]!.HeaderText = "Saldo";
+        _gridBalanceFacturas.Columns["Saldo"]!.DefaultCellStyle.Format = "C0";
+        _gridBalanceFacturas.Columns["Saldo"]!.Width = 100;
+        _gridBalanceFacturas.Columns["Estado"]!.HeaderText = "Estado";
+        _gridBalanceFacturas.Columns["Estado"]!.Width = 80;
+
+        foreach (DataGridViewRow row in _gridBalanceFacturas.Rows)
+        {
+            if (row.DataBoundItem is BalanceFacturaDto factura)
+            {
+                row.DefaultCellStyle.BackColor = factura.Estado switch
+                {
+                    "Pagada" => Color.FromArgb(232, 245, 232),
+                    "Vencida" => Color.FromArgb(255, 235, 235),
+                    _ => Color.White
+                };
+            }
+        }
+    }
+
+    private void SelectFirstBalanceFactura()
+    {
+        if (_gridBalanceFacturas.Rows.Count > 0)
+        {
+            _gridBalanceFacturas.ClearSelection();
+            _gridBalanceFacturas.Rows[0].Selected = true;
+            _gridBalanceFacturas.CurrentCell = _gridBalanceFacturas.Rows[0].Cells[
+                _gridBalanceFacturas.Columns["Numero"]!.Index];
+            OnBalanceFacturaSelected();
+        }
+    }
+
+    private void OnBalanceFacturaSelected()
+    {
+        if (_gridBalanceFacturas.CurrentRow?.DataBoundItem is not BalanceFacturaDto factura)
+        {
+            _gridBalancePagos.DataSource = null;
+            _lblBalancePagosTitulo.Text = "💰 Pagos de Factura";
+            return;
+        }
+
+        _lblBalancePagosTitulo.Text = $"💰 Pagos — {factura.Numero}";
+
+        var pagos = _balanceRepository.GetPagosFactura(factura.Id);
+        _gridBalancePagos.DataSource = pagos;
+
+        if (_gridBalancePagos.Columns.Count > 0)
+        {
+            _gridBalancePagos.Columns["Id"]!.Visible = false;
+            _gridBalancePagos.Columns["Fecha"]!.HeaderText = "Fecha";
+            _gridBalancePagos.Columns["Fecha"]!.Width = 100;
+            _gridBalancePagos.Columns["Valor"]!.HeaderText = "Valor";
+            _gridBalancePagos.Columns["Valor"]!.DefaultCellStyle.Format = "C0";
+            _gridBalancePagos.Columns["MetodoPago"]!.HeaderText = "Método";
+            _gridBalancePagos.Columns["MetodoPago"]!.Width = 100;
+            _gridBalancePagos.Columns["Referencia"]!.HeaderText = "Referencia";
+            _gridBalancePagos.Columns["Notas"]!.HeaderText = "Notas";
+        }
     }
 
     private static string GetBalancePeriodName(BalancePeriodo periodo)
@@ -2863,6 +3137,175 @@ ORDER BY Faltante DESC;";
             BalancePeriodo.Total => "📈 Balance Histórico Total",
             _ => "📈 Balance Mensual"
         };
+    }
+
+    private void PrintBalance()
+    {
+        var printDoc = new System.Drawing.Printing.PrintDocument
+        {
+            DocumentName = "Balance - AceitesPro Facturación"
+        };
+        printDoc.DefaultPageSettings.Landscape = true;
+
+        printDoc.PrintPage += (_, e) =>
+        {
+            var g = e.Graphics!;
+            var b = e.MarginBounds;
+            var y = (float)b.Top;
+
+            using var fontTitle = new Font("Segoe UI", 14, FontStyle.Bold);
+            using var fontSub = new Font("Segoe UI", 9);
+            using var fontSection = new Font("Segoe UI", 10, FontStyle.Bold);
+            using var fontLabel = new Font("Segoe UI", 8, FontStyle.Bold);
+            using var fontValue = new Font("Segoe UI", 11, FontStyle.Bold);
+            using var fontHeader = new Font("Segoe UI", 7, FontStyle.Bold);
+            using var fontCell = new Font("Segoe UI", 7);
+            using var penLine = new Pen(Color.FromArgb(210, 210, 210));
+            using var brushGreen = new SolidBrush(Color.FromArgb(11, 52, 22));
+
+            // Header
+            g.DrawString("AceitesPro \u2014 Balance Financiero", fontTitle, Brushes.Black, b.Left, y);
+            y += fontTitle.GetHeight(g) + 2;
+            var periodo = _lblBalanceDetalleTitulo.Text.Replace("\uD83D\uDCC8 ", "");
+            g.DrawString($"Impreso: {DateTime.Now:dd/MM/yyyy HH:mm}  \u2022  {periodo}", fontSub, Brushes.Gray, b.Left, y);
+            y += fontSub.GetHeight(g) + 8;
+            g.DrawLine(Pens.DarkGray, b.Left, y, b.Right, y);
+            y += 12;
+
+            // Summary cards
+            var cw = b.Width / 4f;
+            DrawPrintCard(g, b.Left, y, "Total Facturado", _lblBalanceFacturado.Text, fontLabel, fontValue, brushGreen);
+            DrawPrintCard(g, b.Left + cw, y, "Total Recaudado", _lblBalanceRecaudado.Text, fontLabel, fontValue, brushGreen);
+            DrawPrintCard(g, b.Left + cw * 2, y, "Cuentas por Cobrar", _lblBalanceCuentasPorCobrar.Text, fontLabel, fontValue, brushGreen);
+            DrawPrintCard(g, b.Left + cw * 3, y, "Balance Neto", _lblBalanceNeto.Text, fontLabel, fontValue, brushGreen);
+            y += fontValue.GetHeight(g) + fontLabel.GetHeight(g) + 16;
+
+            g.DrawLine(penLine, b.Left, y, b.Right, y);
+            y += 10;
+
+            // Balance detail grid
+            var detalleTitle = _lblBalanceDetalleTitulo.Text.Replace("\uD83D\uDCC8 ", "");
+            y = DrawPrintGrid(g, _gridBalanceMensual, detalleTitle, b, y, fontSection, fontHeader, fontCell, penLine);
+            y += 10;
+
+            // Facturas grid
+            if (y < b.Bottom - 80)
+            {
+                var facturasTitle = _lblBalanceFacturasTitulo.Text.Replace("\uD83D\uDCC4 ", "");
+                y = DrawPrintGrid(g, _gridBalanceFacturas, facturasTitle, b, y, fontSection, fontHeader, fontCell, penLine);
+                y += 10;
+            }
+
+            // Pagos grid
+            if (y < b.Bottom - 80 && _gridBalancePagos.Rows.Count > 0)
+            {
+                var pagosTitle = _lblBalancePagosTitulo.Text.Replace("\uD83D\uDCB0 ", "");
+                y = DrawPrintGrid(g, _gridBalancePagos, pagosTitle, b, y, fontSection, fontHeader, fontCell, penLine);
+                y += 10;
+            }
+
+            // Indicators
+            if (y < b.Bottom - 50)
+            {
+                g.DrawLine(penLine, b.Left, y, b.Right, y);
+                y += 8;
+                g.DrawString("Indicadores del Per\u00edodo", fontSection, Brushes.Black, b.Left, y);
+                y += fontSection.GetHeight(g) + 4;
+                g.DrawString(_lblBalanceInfo.Text, fontSub, Brushes.DimGray,
+                    new RectangleF(b.Left, y, b.Width, b.Bottom - y));
+            }
+
+            e.HasMorePages = false;
+        };
+
+        using var preview = new PrintPreviewDialog
+        {
+            Document = printDoc,
+            WindowState = FormWindowState.Maximized
+        };
+        preview.ShowDialog(this);
+    }
+
+    private static void DrawPrintCard(Graphics g, float x, float y, string label, string value, Font fontLabel, Font fontValue, Brush valueBrush)
+    {
+        g.DrawString(label, fontLabel, Brushes.Gray, x + 4, y);
+        g.DrawString(value, fontValue, valueBrush, x + 4, y + fontLabel.GetHeight(g) + 2);
+    }
+
+    private static float DrawPrintGrid(Graphics g, DataGridView grid, string title, Rectangle bounds, float y, Font fontSection, Font fontHeader, Font fontCell, Pen penLine)
+    {
+        if (grid.Rows.Count == 0)
+        {
+            return y;
+        }
+
+        g.DrawString(title, fontSection, Brushes.Black, bounds.Left, y);
+        y += fontSection.GetHeight(g) + 6;
+
+        var columns = new List<(string Header, int Index, float Weight)>();
+        var totalWeight = 0f;
+        foreach (DataGridViewColumn col in grid.Columns)
+        {
+            if (col.Visible)
+            {
+                columns.Add((col.HeaderText, col.Index, col.Width));
+                totalWeight += col.Width;
+            }
+        }
+
+        if (columns.Count == 0)
+        {
+            return y;
+        }
+
+        var availableWidth = (float)bounds.Width;
+        var colWidths = columns.Select(c => c.Weight / totalWeight * availableWidth).ToArray();
+
+        // Header row
+        var headerHeight = fontHeader.GetHeight(g) + 8;
+        using var headerBrush = new SolidBrush(Color.FromArgb(235, 238, 235));
+        g.FillRectangle(headerBrush, bounds.Left, y, availableWidth, headerHeight);
+
+        var x = (float)bounds.Left;
+        for (var i = 0; i < columns.Count; i++)
+        {
+            g.DrawString(columns[i].Header, fontHeader, Brushes.Black, x + 3, y + 4);
+            x += colWidths[i];
+        }
+        y += headerHeight;
+        g.DrawLine(penLine, bounds.Left, y, bounds.Right, y);
+
+        // Data rows
+        var rowHeight = fontCell.GetHeight(g) + 6;
+        var alternate = false;
+        using var altBrush = new SolidBrush(Color.FromArgb(248, 250, 248));
+
+        foreach (DataGridViewRow row in grid.Rows)
+        {
+            if (y + rowHeight > bounds.Bottom - 40)
+            {
+                break;
+            }
+
+            if (alternate)
+            {
+                g.FillRectangle(altBrush, bounds.Left, y, availableWidth, rowHeight);
+            }
+
+            x = bounds.Left;
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var cellValue = row.Cells[columns[i].Index].FormattedValue?.ToString() ?? "";
+                g.DrawString(cellValue, fontCell, Brushes.Black, x + 3, y + 3);
+                x += colWidths[i];
+            }
+
+            y += rowHeight;
+            g.DrawLine(penLine, bounds.Left, y, bounds.Right, y);
+            alternate = !alternate;
+        }
+
+        return y;
     }
 
     private Panel BuildInventarioView()

@@ -5,11 +5,16 @@ namespace Embotelladora.Facturacion.Desktop.Features.Facturas;
 internal sealed class BalanceRepository
 {
     public BalanceResumenDto GetResumen(BalancePeriodo periodo = BalancePeriodo.Mensual)
+        => GetResumenForRange(GetDateRange(periodo));
+
+    public BalanceResumenDto GetResumen(DateTime fecha)
+        => GetResumenForRange((fecha, fecha));
+
+    private BalanceResumenDto GetResumenForRange((DateTime? Inicio, DateTime? Fin) rango)
     {
         using var connection = AppDatabase.CreateConnection();
         connection.Open();
 
-        var rango = GetDateRange(periodo);
         var whereFacturas = BuildDateWhereClause("f.Fecha", rango);
         var wherePagos = BuildDateWhereClause("p.Fecha", rango);
 
@@ -166,6 +171,136 @@ LIMIT @limite;";
         }
 
         return result;
+    }
+
+    public List<BalanceFacturaDto> GetFacturas(BalancePeriodo periodo)
+        => GetFacturasForRange(GetDateRange(periodo));
+
+    public List<BalanceFacturaDto> GetFacturas(DateTime fecha)
+        => GetFacturasForRange((fecha, fecha));
+
+    public List<BalanceFacturaDto> GetFacturas(DateTime inicio, DateTime fin)
+        => GetFacturasForRange((inicio, fin));
+
+    private List<BalanceFacturaDto> GetFacturasForRange((DateTime? Inicio, DateTime? Fin) rango)
+    {
+        var result = new List<BalanceFacturaDto>();
+
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        var where = BuildDateWhereClause("f.Fecha", rango);
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $@"
+SELECT
+    f.Id,
+    f.Numero,
+    f.Fecha,
+    c.Nombre as Cliente,
+    f.Total,
+    f.Saldo,
+    f.Estado
+FROM Factura f
+INNER JOIN Cliente c ON c.Id = f.ClienteId
+WHERE {where}
+ORDER BY date(f.Fecha) DESC, f.Id DESC;";
+
+        AddDateParameters(command, rango);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new BalanceFacturaDto
+            {
+                Id = reader.GetInt64(0),
+                Numero = reader.GetString(1),
+                Fecha = reader.GetString(2),
+                Cliente = reader.GetString(3),
+                Total = ToDecimal(reader, 4),
+                Saldo = ToDecimal(reader, 5),
+                Estado = reader.GetString(6)
+            });
+        }
+
+        return result;
+    }
+
+    public List<BalancePagoDto> GetPagosFactura(long facturaId)
+    {
+        var result = new List<BalancePagoDto>();
+
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+SELECT
+    p.Id,
+    p.Fecha,
+    p.Valor,
+    IFNULL(mp.Nombre, '-') as MetodoPago,
+    IFNULL(p.Referencia, '') as Referencia,
+    IFNULL(p.Notas, '') as Notas
+FROM Pago p
+LEFT JOIN MetodoPago mp ON mp.Id = p.MetodoPagoId
+WHERE p.FacturaId = @facturaId
+ORDER BY date(p.Fecha) DESC, p.Id DESC;";
+
+        var param = command.CreateParameter();
+        param.ParameterName = "@facturaId";
+        param.Value = facturaId;
+        command.Parameters.Add(param);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new BalancePagoDto
+            {
+                Id = reader.GetInt64(0),
+                Fecha = reader.GetString(1),
+                Valor = ToDecimal(reader, 2),
+                MetodoPago = reader.GetString(3),
+                Referencia = reader.GetString(4),
+                Notas = reader.GetString(5)
+            });
+        }
+
+        return result;
+    }
+
+    public List<BalanceMensualDto> GetBalanceDetalleFecha(DateTime fecha)
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+WITH RECURSIVE dias(dia) AS (
+    SELECT date(@fecha, '-6 days')
+    UNION ALL
+    SELECT date(dia, '+1 day')
+    FROM dias
+    WHERE dia < date(@fecha)
+)
+SELECT
+    dia as Periodo,
+    CASE WHEN dia = date(@fecha)
+        THEN '▸ ' || strftime('%d/%m/%Y', dia)
+        ELSE strftime('%d/%m/%Y', dia)
+    END as MesNombre,
+    (SELECT IFNULL(SUM(f.Total), 0) FROM Factura f WHERE date(f.Fecha) = dia) as TotalFacturado,
+    (SELECT IFNULL(SUM(p.Valor), 0) FROM Pago p WHERE date(p.Fecha) = dia) as TotalRecaudado,
+    (SELECT COUNT(*) FROM Factura f WHERE date(f.Fecha) = dia) as NumeroFacturas
+FROM dias
+ORDER BY dia;";
+
+        var param = command.CreateParameter();
+        param.ParameterName = "@fecha";
+        param.Value = fecha.ToString("yyyy-MM-dd");
+        command.Parameters.Add(param);
+
+        return ExecuteBalanceDetalle(command);
     }
 
     public List<EstadisticaMensualDto> GetEstadisticasMensuales()

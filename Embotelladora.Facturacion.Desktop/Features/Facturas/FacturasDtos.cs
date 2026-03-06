@@ -238,6 +238,27 @@ internal sealed class TopClienteDto
     public decimal PorcentajeTotal { get; set; }
 }
 
+internal sealed class BalanceFacturaDto
+{
+    public long Id { get; set; }
+    public string Numero { get; set; } = string.Empty;
+    public string Fecha { get; set; } = string.Empty;
+    public string Cliente { get; set; } = string.Empty;
+    public decimal Total { get; set; }
+    public decimal Saldo { get; set; }
+    public string Estado { get; set; } = string.Empty;
+}
+
+internal sealed class BalancePagoDto
+{
+    public long Id { get; set; }
+    public string Fecha { get; set; } = string.Empty;
+    public decimal Valor { get; set; }
+    public string MetodoPago { get; set; } = string.Empty;
+    public string Referencia { get; set; } = string.Empty;
+    public string Notas { get; set; } = string.Empty;
+}
+
 internal sealed class EstadisticaMensualDto
 {
     public string Periodo { get; set; } = string.Empty;
