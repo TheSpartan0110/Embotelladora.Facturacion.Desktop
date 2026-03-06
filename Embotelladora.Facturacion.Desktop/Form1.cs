@@ -5,6 +5,7 @@ using Embotelladora.Facturacion.Desktop.Data;
 using Embotelladora.Facturacion.Desktop.Features.Clientes;
 using Embotelladora.Facturacion.Desktop.Features.Dashboard;
 using Embotelladora.Facturacion.Desktop.Features.Facturas;
+using Embotelladora.Facturacion.Desktop.UI;
 
 namespace Embotelladora.Facturacion.Desktop;
 
@@ -14,6 +15,9 @@ public partial class Form1 : Form
     private readonly CustomerRepository _customerRepository = new();
     private readonly InvoiceRepository _invoiceRepository = new();
     private readonly PaymentRepository _paymentRepository = new();
+    private readonly CarteraRepository _carteraRepository = new();
+    private readonly BalanceRepository _balanceRepository = new();
+    private readonly InventarioRepository _inventarioRepository = new();
     private readonly Dictionary<string, Button> _menuButtons = [];
     private readonly BindingList<InvoiceItemDraft> _invoiceItems = [];
     private FlowLayoutPanel _sidebarMenu = null!;
@@ -27,6 +31,9 @@ public partial class Form1 : Form
     private Panel _newInvoiceView = null!;
     private Panel _paymentsView = null!;
     private Panel _newPaymentView = null!;
+    private Panel _carteraView = null!;
+    private Panel _balanceView = null!;
+    private Panel _inventarioView = null!;
     private Button _btnHeaderAction = null!;
     private Action? _headerAction;
     private System.Windows.Forms.Timer? _moduleAnimationTimer;
@@ -69,6 +76,33 @@ public partial class Form1 : Form
     private TextBox _txtPaymentNotes = null!;
     private Label _lblPaymentBalance = null!;
     private Label _lblPaymentTotal = null!;
+
+    // Cartera module fields
+    private Label _lblCarteraClientes = null!;
+    private Label _lblCarteraFacturas = null!;
+    private Label _lblCarteraTotalCobrar = null!;
+    private Label _lblCarteraVencido = null!;
+    private DataGridView _gridFacturasPendientes = null!;
+    private DataGridView _gridClientesSaldo = null!;
+    private DataGridView _gridEdadSaldos = null!;
+
+    // Balance module fields
+    private Label _lblBalanceFacturado = null!;
+    private Label _lblBalanceRecaudado = null!;
+    private Label _lblBalanceCuentasPorCobrar = null!;
+    private Label _lblBalanceNeto = null!;
+    private DataGridView _gridBalanceMensual = null!;
+    private DataGridView _gridTopClientes = null!;
+
+    // Inventario module fields
+    private Label _lblInventarioTotalProductos = null!;
+    private Label _lblInventarioValorTotal = null!;
+    private Label _lblInventarioStockBajo = null!;
+    private Label _lblInventarioAgotados = null!;
+    private DataGridView _gridProductosInventario = null!;
+    private DataGridView _gridMovimientos = null!;
+    private DataGridView _gridStockBajo = null!;
+    private TextBox _txtSearchInventario = null!;
 
     public Form1()
     {
@@ -157,9 +191,9 @@ public partial class Form1 : Form
         AddMenuButton(_sidebarMenu, "Clientes", () => ShowModule("Clientes"));
         AddMenuButton(_sidebarMenu, "Facturas", () => ShowModule("Facturas"));
         AddMenuButton(_sidebarMenu, "Pagos", () => ShowModule("Pagos"));
-        AddMenuButton(_sidebarMenu, "Cartera", () => ShowPendingModule("Cartera"));
-        AddMenuButton(_sidebarMenu, "Balance", () => ShowPendingModule("Balance"));
-        AddMenuButton(_sidebarMenu, "Inventario", () => ShowPendingModule("Inventario"));
+        AddMenuButton(_sidebarMenu, "Cartera", () => ShowModule("Cartera"));
+        AddMenuButton(_sidebarMenu, "Balance", () => ShowModule("Balance"));
+        AddMenuButton(_sidebarMenu, "Inventario", () => ShowModule("Inventario"));
 
         AddMenuSection("SISTEMA", 18);
         AddMenuButton(_sidebarMenu, "Configuración", OpenDatabaseFolder);
@@ -287,6 +321,9 @@ public partial class Form1 : Form
         _invoicesView = BuildInvoicesListView();
         _paymentsView = BuildPaymentsListView();
         _newPaymentView = BuildNewPaymentView();
+        _carteraView = BuildCarteraView();
+        _balanceView = BuildBalanceView();
+        _inventarioView = BuildInventarioView();
     }
 
     private Panel BuildInvoicesListView()
@@ -790,7 +827,7 @@ public partial class Form1 : Form
             BorderStyle = BorderStyle.None,
             ReadOnly = false
         };
-        
+
         // Agregar columna de eliminación ANTES de vincular DataSource
         var deleteColumn = new DataGridViewButtonColumn
         {
@@ -803,10 +840,10 @@ public partial class Form1 : Form
             SortMode = DataGridViewColumnSortMode.NotSortable
         };
         _gridInvoiceItems.Columns.Add(deleteColumn);
-        
+
         // Ahora vincular DataSource
         _gridInvoiceItems.DataSource = _invoiceItems;
-        
+
         _gridInvoiceItems.CellEndEdit += (_, _) => RecalculateInvoiceTotals();
         _gridInvoiceItems.DataBindingComplete += (_, _) => ConfigureInvoiceItemsColumns();
         _gridInvoiceItems.DefaultCellStyle.Padding = new Padding(2, 4, 2, 4);
@@ -814,12 +851,7 @@ public partial class Form1 : Form
         _gridInvoiceItems.CellContentClick += (sender, e) =>
         {
             var eliminarColumn = _gridInvoiceItems.Columns["Eliminar"];
-            if (eliminarColumn is null)
-            {
-                return;
-            }
-
-            if (e.ColumnIndex == eliminarColumn.Index && e.RowIndex >= 0)
+            if (eliminarColumn != null && e.ColumnIndex == eliminarColumn.Index && e.RowIndex >= 0)
             {
                 if (_gridInvoiceItems.Rows[e.RowIndex].DataBoundItem is InvoiceItemDraft item)
                 {
@@ -828,7 +860,7 @@ public partial class Form1 : Form
                 }
             }
         };
-        
+
         productsCard.Controls.Add(_gridInvoiceItems);
 
         leftLayout.Controls.Add(productsCard, 0, 1);
@@ -1026,7 +1058,13 @@ public partial class Form1 : Form
 
     private void ShowModule(string moduleName)
     {
-        SetMenuSelection(moduleName == "NuevaFactura" ? "Facturas" : moduleName);
+        var menuSelection = moduleName switch
+        {
+            "NuevaFactura" => "Facturas",
+            "NuevoPago" => "Pagos",
+            _ => moduleName
+        };
+        SetMenuSelection(menuSelection);
         _btnHeaderAction.Visible = false;
         _headerAction = null;
 
@@ -1082,6 +1120,30 @@ public partial class Form1 : Form
             _btnHeaderAction.Visible = true;
             _headerAction = () => ShowModule("Pagos");
             ShowAnimatedView(_newPaymentView, LoadPaymentModule);
+            return;
+        }
+
+        if (moduleName == "Cartera")
+        {
+            _headerTitle.Text = "Cartera";
+            _headerSubtitle.Text = "Análisis de cuentas por cobrar y vencimientos";
+            ShowAnimatedView(_carteraView, LoadCartera);
+            return;
+        }
+
+        if (moduleName == "Balance")
+        {
+            _headerTitle.Text = "Balance";
+            _headerSubtitle.Text = "Análisis financiero y rentabilidad";
+            ShowAnimatedView(_balanceView, LoadBalance);
+            return;
+        }
+
+        if (moduleName == "Inventario")
+        {
+            _headerTitle.Text = "Inventario";
+            _headerSubtitle.Text = "Gestión de productos, stock y movimientos";
+            ShowAnimatedView(_inventarioView, LoadInventario);
             return;
         }
 
@@ -1487,12 +1549,12 @@ public partial class Form1 : Form
         _cmbInvoicePaymentMethod.ValueMember = nameof(PaymentMethodLookupDto.Id);
 
         var products = _invoiceRepository.GetProducts();
-        
+
         if (products.Count == 0)
         {
             MessageBox.Show("No hay productos registrados en la base de datos. Por favor, verifica la inicialización.", "Sin Productos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-        
+
         _cmbItemProduct.DataSource = products;
         _cmbItemProduct.DisplayMember = nameof(ProductLookupDto.DisplayName);
         _cmbItemProduct.ValueMember = nameof(ProductLookupDto.Id);
@@ -1583,7 +1645,7 @@ public partial class Form1 : Form
         {
             _cmbItemProduct.SelectedIndex = 0;
         }
-        
+
         RecalculateInvoiceTotals();
         _gridInvoiceItems.Refresh();
     }
@@ -1873,7 +1935,7 @@ ORDER BY Faltante DESC;";
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        
+
         var lblFilter = new Label
         {
             Text = "Historial de Pagos",
@@ -2209,7 +2271,7 @@ ORDER BY Faltante DESC;";
             return;
         }
 
-        var methodId = _cmbPaymentMethod.SelectedValue is long methodValue ? methodValue : (Convert.ToInt64(_cmbPaymentMethod.SelectedValue));
+        var methodId = _cmbPaymentMethod.SelectedValue is long methodValue ? methodValue : Convert.ToInt64(_cmbPaymentMethod.SelectedValue);
 
         var request = new PaymentCreateRequest
         {
@@ -2242,7 +2304,7 @@ ORDER BY Faltante DESC;";
         _txtPaymentReference.Clear();
         _txtPaymentNotes.Clear();
         _dtpPaymentDate.Value = DateTime.Today;
-        
+
         if (_cmbPaymentInvoice.Items.Count > 0)
         {
             _cmbPaymentInvoice.SelectedIndex = 0;
@@ -2257,6 +2319,911 @@ ORDER BY Faltante DESC;";
         _lblPaymentTotal.Text = "$ 0";
     }
 
+    private Panel BuildCarteraView()
+    {
+        var view = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 72, 0, 0),
+            AutoScroll = true
+        };
+
+        var mainLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Margin = new Padding(12),
+            Padding = Padding.Empty
+        };
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+        view.Controls.Add(mainLayout);
+
+        // 1. TARJETAS DE RESUMEN
+        var cardsPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 0, 8)
+        };
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+
+        _lblCarteraClientes = CreateCard(cardsPanel, 0, "Clientes con Saldo", out _);
+        _lblCarteraFacturas = CreateCard(cardsPanel, 1, "Facturas Pendientes", out _);
+        _lblCarteraTotalCobrar = CreateCard(cardsPanel, 2, "Total por Cobrar", out _);
+        _lblCarteraVencido = CreateCard(cardsPanel, 3, "Saldo Vencido", out _);
+
+        mainLayout.Controls.Add(cardsPanel, 0, 0);
+
+        // 2. FACTURAS PENDIENTES
+        var facturasPendientesCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(0, 0, 0, 12)
+        };
+
+        var facturasPendientesTitle = new Label
+        {
+            Text = "📄 Facturas Pendientes de Pago",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        facturasPendientesCard.Controls.Add(facturasPendientesTitle);
+
+        _gridFacturasPendientes = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridFacturasPendientes);
+        facturasPendientesCard.Controls.Add(_gridFacturasPendientes);
+
+        mainLayout.Controls.Add(facturasPendientesCard, 0, 1);
+
+        // 3. CLIENTES CON SALDO
+        var clientesSaldoCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(0, 0, 0, 12)
+        };
+
+        var clientesSaldoTitle = new Label
+        {
+            Text = "👥 Clientes con Saldo Pendiente",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        clientesSaldoCard.Controls.Add(clientesSaldoTitle);
+
+        _gridClientesSaldo = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false,
+            RowTemplate = { Height = 52 }
+        };
+        _gridClientesSaldo.CellDoubleClick += (_, _) => EditSelectedCustomer();
+        _gridClientesSaldo.CellContentClick += OnCustomerGridCellContentClick;
+        ConfigureGridStyle(_gridClientesSaldo);
+        _gridClientesSaldo.DefaultCellStyle.Padding = new Padding(6, 8, 6, 8);
+        clientesSaldoCard.Controls.Add(_gridClientesSaldo);
+
+        mainLayout.Controls.Add(clientesSaldoCard, 0, 2);
+
+        // 4. EDAD DE SALDOS
+        var edadSaldosCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = Padding.Empty
+        };
+
+        var edadSaldosTitle = new Label
+        {
+            Text = "📊 Análisis de Edad de Saldos",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        edadSaldosCard.Controls.Add(edadSaldosTitle);
+
+        _gridEdadSaldos = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridEdadSaldos);
+        edadSaldosCard.Controls.Add(_gridEdadSaldos);
+
+        mainLayout.Controls.Add(edadSaldosCard, 0, 3);
+
+        return view;
+    }
+
+    private void LoadCartera()
+    {
+        var resumen = _carteraRepository.GetResumen();
+        _lblCarteraClientes.Text = resumen.ClientesConSaldo.ToString("N0");
+        _lblCarteraFacturas.Text = resumen.FacturasPendientes.ToString("N0");
+        _lblCarteraTotalCobrar.Text = resumen.TotalPorCobrar.ToString("C0");
+        _lblCarteraVencido.Text = resumen.SaldoVencido.ToString("C0");
+
+        // Cargar facturas pendientes
+        var facturasPendientes = _carteraRepository.GetFacturasPendientes();
+        _gridFacturasPendientes.DataSource = facturasPendientes;
+
+        if (_gridFacturasPendientes.Columns.Count > 0)
+        {
+            _gridFacturasPendientes.Columns["Id"]!.Visible = false;
+            _gridFacturasPendientes.Columns["Numero"]!.HeaderText = "N° Factura";
+            _gridFacturasPendientes.Columns["Numero"]!.Width = 120;
+            _gridFacturasPendientes.Columns["Fecha"]!.HeaderText = "Fecha";
+            _gridFacturasPendientes.Columns["Fecha"]!.Width = 100;
+            _gridFacturasPendientes.Columns["Cliente"]!.HeaderText = "Cliente";
+            _gridFacturasPendientes.Columns["Total"]!.HeaderText = "Total";
+            _gridFacturasPendientes.Columns["Total"]!.DefaultCellStyle.Format = "C0";
+            _gridFacturasPendientes.Columns["Saldo"]!.HeaderText = "Saldo";
+            _gridFacturasPendientes.Columns["Saldo"]!.DefaultCellStyle.Format = "C0";
+            _gridFacturasPendientes.Columns["Saldo"]!.Width = 110;
+            _gridFacturasPendientes.Columns["DiasTranscurridos"]!.HeaderText = "Días";
+            _gridFacturasPendientes.Columns["DiasTranscurridos"]!.Width = 60;
+            _gridFacturasPendientes.Columns["EstadoVencimiento"]!.HeaderText = "Estado";
+            _gridFacturasPendientes.Columns["EstadoVencimiento"]!.Width = 130;
+
+            // Colorear filas según vencimiento
+            foreach (DataGridViewRow row in _gridFacturasPendientes.Rows)
+            {
+                if (row.DataBoundItem is FacturaPendienteDto factura)
+                {
+                    if (factura.DiasTranscurridos > 90)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 220, 220);
+                    }
+                    else if (factura.DiasTranscurridos > 60)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 245, 230);
+                    }
+                    else if (factura.DiasTranscurridos > 30)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
+                    }
+                }
+            }
+        }
+
+        // Cargar clientes con saldo
+        var clientesSaldo = _carteraRepository.GetClientesConSaldo();
+        _gridClientesSaldo.DataSource = clientesSaldo;
+
+        if (_gridClientesSaldo.Columns.Count > 0)
+        {
+            _gridClientesSaldo.Columns["Id"]!.Visible = false;
+            _gridClientesSaldo.Columns["Codigo"]!.HeaderText = "Código";
+            _gridClientesSaldo.Columns["Codigo"]!.Width = 100;
+            _gridClientesSaldo.Columns["Nombre"]!.HeaderText = "Cliente";
+            _gridClientesSaldo.Columns["Telefono"]!.HeaderText = "Teléfono";
+            _gridClientesSaldo.Columns["Telefono"]!.Width = 120;
+            _gridClientesSaldo.Columns["FacturasPendientes"]!.HeaderText = "Facturas";
+            _gridClientesSaldo.Columns["FacturasPendientes"]!.Width = 90;
+            _gridClientesSaldo.Columns["SaldoTotal"]!.HeaderText = "Saldo Total";
+            _gridClientesSaldo.Columns["SaldoTotal"]!.DefaultCellStyle.Format = "C0";
+            _gridClientesSaldo.Columns["SaldoVencido"]!.HeaderText = "Saldo Vencido";
+            _gridClientesSaldo.Columns["SaldoVencido"]!.DefaultCellStyle.Format = "C0";
+            _gridClientesSaldo.Columns["SaldoVencido"]!.Width = 130;
+        }
+
+        // Cargar edad de saldos
+        var edadSaldos = _carteraRepository.GetEdadSaldos();
+        _gridEdadSaldos.DataSource = edadSaldos;
+
+        if (_gridEdadSaldos.Columns.Count > 0)
+        {
+            _gridEdadSaldos.Columns["RangoEdad"]!.HeaderText = "Rango de Edad";
+            _gridEdadSaldos.Columns["RangoEdad"]!.Width = 150;
+            _gridEdadSaldos.Columns["CantidadFacturas"]!.HeaderText = "Cantidad Facturas";
+            _gridEdadSaldos.Columns["CantidadFacturas"]!.Width = 150;
+            _gridEdadSaldos.Columns["TotalSaldo"]!.HeaderText = "Total Saldo";
+            _gridEdadSaldos.Columns["TotalSaldo"]!.DefaultCellStyle.Format = "C0";
+            
+            // Colorear según edad
+            foreach (DataGridViewRow row in _gridEdadSaldos.Rows)
+            {
+                if (row.DataBoundItem is EdadSaldoDto edad)
+                {
+                    if (edad.RangoEdad.Contains("90"))
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 220, 220);
+                        row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+                    }
+                    else if (edad.RangoEdad.Contains("61-90"))
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 245, 230);
+                    }
+                    else if (edad.RangoEdad.Contains("31-60"))
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
+                    }
+                }
+            }
+        }
+    }
+
+    private Panel BuildBalanceView()
+    {
+        var view = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 72, 0, 0),
+            AutoScroll = true
+        };
+
+        var mainLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = new Padding(12),
+            Padding = Padding.Empty
+        };
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        view.Controls.Add(mainLayout);
+
+        // 1. TARJETAS DE RESUMEN
+        var cardsPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 0, 8)
+        };
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+
+        _lblBalanceFacturado = CreateCard(cardsPanel, 0, "Total Facturado", out var lblFacturasEmitidas);
+        _lblBalanceRecaudado = CreateCard(cardsPanel, 1, "Total Recaudado", out _);
+        _lblBalanceCuentasPorCobrar = CreateCard(cardsPanel, 2, "Cuentas por Cobrar", out _);
+        _lblBalanceNeto = CreateCard(cardsPanel, 3, "Balance Neto", out _);
+
+        mainLayout.Controls.Add(cardsPanel, 0, 0);
+
+        // 2. BALANCE MENSUAL Y TOP CLIENTES
+        var analyticsLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+
+        var balanceMensualCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(0, 0, 6, 12)
+        };
+
+        var balanceMensualTitle = new Label
+        {
+            Text = "📈 Balance Mensual (Últimos 6 Meses)",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        balanceMensualCard.Controls.Add(balanceMensualTitle);
+
+        _gridBalanceMensual = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridBalanceMensual);
+        balanceMensualCard.Controls.Add(_gridBalanceMensual);
+
+        analyticsLayout.Controls.Add(balanceMensualCard, 0, 0);
+
+        var topClientesCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(6, 0, 0, 12)
+        };
+
+        var topClientesTitle = new Label
+        {
+            Text = "🏆 Top 10 Clientes",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        topClientesCard.Controls.Add(topClientesTitle);
+
+        _gridTopClientes = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridTopClientes);
+        topClientesCard.Controls.Add(_gridTopClientes);
+
+        analyticsLayout.Controls.Add(topClientesCard, 1, 0);
+
+        mainLayout.Controls.Add(analyticsLayout, 0, 1);
+
+        // 3. INFORMACIÓN ADICIONAL
+        var infoCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = Padding.Empty
+        };
+
+        var infoTitle = new Label
+        {
+            Text = "📊 Indicadores Clave del Mes Actual",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        infoCard.Controls.Add(infoTitle);
+
+        var infoPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 12, 0, 0)
+        };
+
+        var lblInfo = new Label
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 10),
+            ForeColor = Color.FromArgb(90, 90, 90),
+            Text = "Cargando indicadores..."
+        };
+        infoPanel.Controls.Add(lblInfo);
+        infoCard.Controls.Add(infoPanel);
+
+        mainLayout.Controls.Add(infoCard, 0, 2);
+
+        // Cargar datos del balance
+        LoadBalance();
+        return view;
+    }
+
+    private void LoadBalance()
+    {
+        var resumen = _balanceRepository.GetResumen();
+        _lblBalanceFacturado.Text = resumen.TotalFacturado.ToString("C0");
+        _lblBalanceRecaudado.Text = resumen.TotalRecaudado.ToString("C0");
+        _lblBalanceCuentasPorCobrar.Text = resumen.CuentasPorCobrar.ToString("C0");
+        _lblBalanceNeto.Text = resumen.BalanceNeto.ToString("C0");
+
+        // Cargar balance mensual
+        var balanceMensual = _balanceRepository.GetBalanceMensual();
+        _gridBalanceMensual.DataSource = balanceMensual;
+
+        if (_gridBalanceMensual.Columns.Count > 0)
+        {
+            _gridBalanceMensual.Columns["Periodo"]!.Visible = false;
+            _gridBalanceMensual.Columns["MesNombre"]!.HeaderText = "Mes";
+            _gridBalanceMensual.Columns["MesNombre"]!.Width = 100;
+            _gridBalanceMensual.Columns["TotalFacturado"]!.HeaderText = "Facturado";
+            _gridBalanceMensual.Columns["TotalFacturado"]!.DefaultCellStyle.Format = "C0";
+            _gridBalanceMensual.Columns["TotalRecaudado"]!.HeaderText = "Recaudado";
+            _gridBalanceMensual.Columns["TotalRecaudado"]!.DefaultCellStyle.Format = "C0";
+            _gridBalanceMensual.Columns["NumeroFacturas"]!.HeaderText = "N° Facturas";
+            _gridBalanceMensual.Columns["NumeroFacturas"]!.Width = 100;
+
+            // Colorear mes actual
+            var mesActual = DateTime.Now.ToString("yyyy-MM");
+            foreach (DataGridViewRow row in _gridBalanceMensual.Rows)
+            {
+                if (row.DataBoundItem is BalanceMensualDto balance && balance.Periodo == mesActual)
+                {
+                    row.DefaultCellStyle.BackColor = Color.FromArgb(240, 250, 240);
+                    row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+                }
+            }
+        }
+
+        // Cargar top clientes
+        var topClientes = _balanceRepository.GetTopClientes();
+        _gridTopClientes.DataSource = topClientes;
+
+        if (_gridTopClientes.Columns.Count > 0)
+        {
+            _gridTopClientes.Columns["Id"]!.Visible = false;
+            _gridTopClientes.Columns["Codigo"]!.HeaderText = "Código";
+            _gridTopClientes.Columns["Codigo"]!.Width = 80;
+            _gridTopClientes.Columns["Nombre"]!.HeaderText = "Cliente";
+            _gridTopClientes.Columns["NumeroFacturas"]!.HeaderText = "Facturas";
+            _gridTopClientes.Columns["NumeroFacturas"]!.Width = 80;
+            _gridTopClientes.Columns["TotalFacturado"]!.HeaderText = "Total";
+            _gridTopClientes.Columns["TotalFacturado"]!.DefaultCellStyle.Format = "C0";
+            _gridTopClientes.Columns["TotalFacturado"]!.Width = 110;
+            _gridTopClientes.Columns["SaldoPendiente"]!.HeaderText = "Saldo";
+            _gridTopClientes.Columns["SaldoPendiente"]!.DefaultCellStyle.Format = "C0";
+            _gridTopClientes.Columns["SaldoPendiente"]!.Width = 110;
+            _gridTopClientes.Columns["PorcentajeTotal"]!.HeaderText = "%";
+            _gridTopClientes.Columns["PorcentajeTotal"]!.DefaultCellStyle.Format = "N2";
+            _gridTopClientes.Columns["PorcentajeTotal"]!.Width = 60;
+
+            // Colorear top 3
+            for (int i = 0; i < Math.Min(3, _gridTopClientes.Rows.Count); i++)
+            {
+                var row = _gridTopClientes.Rows[i];
+                row.DefaultCellStyle.BackColor = i switch
+                {
+                    0 => Color.FromArgb(255, 248, 220), // Oro
+                    1 => Color.FromArgb(240, 240, 240), // Plata
+                    2 => Color.FromArgb(255, 239, 213), // Bronce
+                    _ => Color.White
+                };
+                row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            }
+        }
+    }
+
+    private Panel BuildInventarioView()
+    {
+        var view = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(0, 72, 0, 0),
+            AutoScroll = true
+        };
+
+        var mainLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Margin = new Padding(12),
+            Padding = Padding.Empty
+        };
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        view.Controls.Add(mainLayout);
+
+        // 1. TARJETAS DE RESUMEN
+        var cardsPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 0, 8)
+        };
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+
+        _lblInventarioTotalProductos = CreateCard(cardsPanel, 0, "Total Productos", out _);
+        _lblInventarioValorTotal = CreateCard(cardsPanel, 1, "Valor Inventario", out _);
+        _lblInventarioStockBajo = CreateCard(cardsPanel, 2, "Stock Bajo", out _);
+        _lblInventarioAgotados = CreateCard(cardsPanel, 3, "Productos Agotados", out _);
+
+        mainLayout.Controls.Add(cardsPanel, 0, 0);
+
+        // 2. BARRA DE BÚSQUEDA
+        var searchCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(14),
+            Margin = new Padding(0, 0, 0, 12)
+        };
+
+        var searchRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
+
+        _txtSearchInventario = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            PlaceholderText = "Buscar producto por código o nombre...",
+            Font = new Font("Segoe UI", 10)
+        };
+        _txtSearchInventario.TextChanged += (_, _) => LoadProductosInventario(_txtSearchInventario.Text);
+
+        var btnClearSearch = new Button
+        {
+            Text = "✕",
+            Dock = DockStyle.Fill,
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.Gray,
+            Font = new Font("Segoe UI", 9),
+            Cursor = Cursors.Hand
+        };
+        btnClearSearch.FlatAppearance.BorderSize = 0;
+        btnClearSearch.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
+        btnClearSearch.Click += (_, _) => { _txtSearchInventario.Clear(); _txtSearchInventario.Focus(); };
+
+        searchRow.Controls.Add(_txtSearchInventario, 0, 0);
+        searchRow.Controls.Add(btnClearSearch, 1, 0);
+        searchCard.Controls.Add(searchRow);
+
+        mainLayout.Controls.Add(searchCard, 0, 1);
+
+        // 3. PRODUCTOS Y MOVIMIENTOS
+        var contentLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        contentLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        contentLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+
+        var productosCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(0, 0, 6, 12)
+        };
+
+        var productosTitle = new Label
+        {
+            Text = "📦 Productos en Inventario",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        productosCard.Controls.Add(productosTitle);
+
+        _gridProductosInventario = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridProductosInventario);
+        productosCard.Controls.Add(_gridProductosInventario);
+
+        contentLayout.Controls.Add(productosCard, 0, 0);
+
+        var movimientosCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = new Padding(6, 0, 0, 12)
+        };
+
+        var movimientosTitle = new Label
+        {
+            Text = "📋 Movimientos Recientes",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        movimientosCard.Controls.Add(movimientosTitle);
+
+        _gridMovimientos = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridMovimientos);
+        movimientosCard.Controls.Add(_gridMovimientos);
+
+        contentLayout.Controls.Add(movimientosCard, 1, 0);
+
+        mainLayout.Controls.Add(contentLayout, 0, 2);
+
+        // 4. PRODUCTOS CON STOCK BAJO
+        var stockBajoCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(16),
+            Margin = Padding.Empty
+        };
+
+        var stockBajoTitle = new Label
+        {
+            Text = "⚠️ Alertas de Stock Bajo",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        stockBajoCard.Controls.Add(stockBajoTitle);
+
+        _gridStockBajo = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridStockBajo);
+        stockBajoCard.Controls.Add(_gridStockBajo);
+
+        mainLayout.Controls.Add(stockBajoCard, 0, 3);
+
+        return view;
+    }
+
+    private void LoadInventario()
+    {
+        var resumen = _inventarioRepository.GetResumen();
+        _lblInventarioTotalProductos.Text = resumen.TotalProductos.ToString("N0");
+        _lblInventarioValorTotal.Text = resumen.ValorInventario.ToString("C0");
+        _lblInventarioStockBajo.Text = resumen.ProductosStockBajo.ToString("N0");
+        _lblInventarioAgotados.Text = resumen.ProductosAgotados.ToString("N0");
+
+        LoadProductosInventario(_txtSearchInventario.Text);
+        LoadMovimientos();
+        LoadStockBajo();
+    }
+
+    private void LoadProductosInventario(string? search)
+    {
+        var productos = _inventarioRepository.GetProductos(search);
+        _gridProductosInventario.DataSource = productos;
+
+        if (_gridProductosInventario.Columns.Count > 0)
+        {
+            _gridProductosInventario.Columns["Id"]!.Visible = false;
+            _gridProductosInventario.Columns["Codigo"]!.HeaderText = "Código";
+            _gridProductosInventario.Columns["Codigo"]!.Width = 100;
+            _gridProductosInventario.Columns["Nombre"]!.HeaderText = "Producto";
+            _gridProductosInventario.Columns["Unidad"]!.HeaderText = "Unidad";
+            _gridProductosInventario.Columns["Unidad"]!.Width = 120;
+            _gridProductosInventario.Columns["StockActual"]!.HeaderText = "Stock";
+            _gridProductosInventario.Columns["StockActual"]!.DefaultCellStyle.Format = "N0";
+            _gridProductosInventario.Columns["StockActual"]!.Width = 80;
+            _gridProductosInventario.Columns["StockMinimo"]!.HeaderText = "Mínimo";
+            _gridProductosInventario.Columns["StockMinimo"]!.DefaultCellStyle.Format = "N0";
+            _gridProductosInventario.Columns["StockMinimo"]!.Width = 80;
+            _gridProductosInventario.Columns["PrecioBase"]!.HeaderText = "Precio";
+            _gridProductosInventario.Columns["PrecioBase"]!.DefaultCellStyle.Format = "C0";
+            _gridProductosInventario.Columns["ValorStock"]!.HeaderText = "Valor Stock";
+            _gridProductosInventario.Columns["ValorStock"]!.DefaultCellStyle.Format = "C0";
+            _gridProductosInventario.Columns["ValorStock"]!.Width = 110;
+            _gridProductosInventario.Columns["EstadoStock"]!.HeaderText = "Estado";
+            _gridProductosInventario.Columns["EstadoStock"]!.Width = 90;
+
+            // Colorear según estado
+            foreach (DataGridViewRow row in _gridProductosInventario.Rows)
+            {
+                if (row.DataBoundItem is ProductoInventarioDto producto)
+                {
+                    switch (producto.EstadoStock)
+                    {
+                        case "Agotado":
+                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 220, 220);
+                            row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+                            break;
+                        case "Bajo":
+                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 245, 230);
+                            break;
+                        case "Medio":
+                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
+                            break;
+                    }
+                }
+            }
+        }
+    }
+
+    private void LoadMovimientos()
+    {
+        var movimientos = _inventarioRepository.GetMovimientos(50);
+        _gridMovimientos.DataSource = movimientos;
+
+        if (_gridMovimientos.Columns.Count > 0)
+        {
+            _gridMovimientos.Columns["Id"]!.Visible = false;
+            _gridMovimientos.Columns["Fecha"]!.HeaderText = "Fecha";
+            _gridMovimientos.Columns["Fecha"]!.Width = 90;
+            _gridMovimientos.Columns["Codigo"]!.HeaderText = "Código";
+            _gridMovimientos.Columns["Codigo"]!.Width = 80;
+            _gridMovimientos.Columns["Producto"]!.HeaderText = "Producto";
+            _gridMovimientos.Columns["Tipo"]!.HeaderText = "Tipo";
+            _gridMovimientos.Columns["Tipo"]!.Width = 80;
+            _gridMovimientos.Columns["Cantidad"]!.HeaderText = "Cantidad";
+            _gridMovimientos.Columns["Cantidad"]!.DefaultCellStyle.Format = "N0";
+            _gridMovimientos.Columns["Cantidad"]!.Width = 80;
+            _gridMovimientos.Columns["Referencia"]!.HeaderText = "Referencia";
+
+            // Colorear según tipo
+            foreach (DataGridViewRow row in _gridMovimientos.Rows)
+            {
+                if (row.DataBoundItem is MovimientoInventarioDto movimiento)
+                {
+                    if (movimiento.Tipo == "ENTRADA")
+                    {
+                        row.DefaultCellStyle.ForeColor = Color.FromArgb(0, 120, 0);
+                    }
+                    else if (movimiento.Tipo == "SALIDA")
+                    {
+                        row.DefaultCellStyle.ForeColor = Color.FromArgb(180, 0, 0);
+                    }
+                }
+            }
+        }
+    }
+
+    private void LoadStockBajo()
+    {
+        var stockBajo = _inventarioRepository.GetProductosStockBajo();
+        _gridStockBajo.DataSource = stockBajo;
+
+        if (_gridStockBajo.Columns.Count > 0)
+        {
+            _gridStockBajo.Columns["Id"]!.Visible = false;
+            _gridStockBajo.Columns["Codigo"]!.HeaderText = "Código";
+            _gridStockBajo.Columns["Codigo"]!.Width = 100;
+            _gridStockBajo.Columns["Nombre"]!.HeaderText = "Producto";
+            _gridStockBajo.Columns["Unidad"]!.HeaderText = "Unidad";
+            _gridStockBajo.Columns["Unidad"]!.Width = 120;
+            _gridStockBajo.Columns["StockActual"]!.HeaderText = "Stock Actual";
+            _gridStockBajo.Columns["StockActual"]!.DefaultCellStyle.Format = "N0";
+            _gridStockBajo.Columns["StockActual"]!.Width = 100;
+            _gridStockBajo.Columns["StockMinimo"]!.HeaderText = "Stock Mínimo";
+            _gridStockBajo.Columns["StockMinimo"]!.DefaultCellStyle.Format = "N0";
+            _gridStockBajo.Columns["StockMinimo"]!.Width = 110;
+            _gridStockBajo.Columns["Faltante"]!.HeaderText = "Faltante";
+            _gridStockBajo.Columns["Faltante"]!.DefaultCellStyle.Format = "N0";
+            _gridStockBajo.Columns["Faltante"]!.Width = 90;
+            _gridStockBajo.Columns["PrecioBase"]!.HeaderText = "Precio";
+            _gridStockBajo.Columns["PrecioBase"]!.DefaultCellStyle.Format = "C0";
+            _gridStockBajo.Columns["ValorFaltante"]!.HeaderText = "Valor Faltante";
+            _gridStockBajo.Columns["ValorFaltante"]!.DefaultCellStyle.Format = "C0";
+            _gridStockBajo.Columns["ValorFaltante"]!.Width = 120;
+
+            // Colorear según criticidad
+            foreach (DataGridViewRow row in _gridStockBajo.Rows)
+            {
+                if (row.DataBoundItem is ProductoStockBajoDto producto)
+                {
+                    if (producto.StockActual == 0)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 220, 220);
+                        row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+                    }
+                    else if (producto.Faltante >= producto.StockMinimo)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 240, 230);
+                    }
+                    else if (producto.Faltante > 0)
+                    {
+                        row.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 230);
+                    }
+                }
+            }
+        }
+    }
+
     private sealed class InvoiceItemDraft
     {
         public long ProductId { get; set; }
@@ -2266,38 +3233,5 @@ ORDER BY Faltante DESC;";
         public decimal PrecioUnitario { get; set; }
         public bool AplicaIva { get; set; }
         public decimal TotalLinea { get; set; }
-    }
-
-    private sealed class RoundedPanel : Panel
-    {
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public int Radius { get; set; } = 12;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Color BorderColor { get; set; } = Color.LightGray;
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = CreateRoundedPath(rect, Radius);
-            using var pen = new Pen(BorderColor, 1);
-            e.Graphics.DrawPath(pen, path);
-            Region = new Region(path);
-        }
-
-        private static GraphicsPath CreateRoundedPath(Rectangle rect, int radius)
-        {
-            var diameter = radius * 2;
-            var path = new GraphicsPath();
-            path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
-            path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);
-            path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
-            path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
     }
 }

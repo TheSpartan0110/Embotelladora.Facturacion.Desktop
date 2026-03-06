@@ -212,4 +212,9 @@ VALUES
         command.CommandText = sql;
         command.ExecuteNonQuery();
     }
+
+    public static void SaveChanges()
+    {
+        // No-op for compatibility
+    }
 }

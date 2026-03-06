@@ -1,25 +1,19 @@
-﻿namespace Embotelladora.Facturacion.Desktop
+﻿using System.Windows.Forms;
+
+namespace Embotelladora.Facturacion.Desktop;
+
+partial class Form1 : Form
 {
-    partial class Form1
+    private System.ComponentModel.IContainer components = null;
+
+    private void InitializeComponent()
     {
-        private System.ComponentModel.IContainer components = null;
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null))
-            {
-                components.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-
-        private void InitializeComponent()
-        {
-            components = new System.ComponentModel.Container();
-            AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 450);
-            Text = "Form1";
-        }
+        SuspendLayout();
+        // 
+        // Form1
+        // 
+        ClientSize = new Size(509, 390);
+        Name = "Form1";
+        ResumeLayout(false);
     }
 }

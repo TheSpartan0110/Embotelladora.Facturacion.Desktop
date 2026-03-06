@@ -28,7 +28,7 @@ internal sealed class CustomerRepository
         return command.ExecuteNonQuery() > 0;
     }
 
-    public List<CustomerGridRowDto> GetGridRows(string? search)
+    public List<CustomerGridRowDto> GetGridRows(string? search = null)
     {
         var rows = new List<CustomerGridRowDto>();
 
@@ -36,39 +36,31 @@ internal sealed class CustomerRepository
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = @"
-SELECT c.Id,
-       c.Nombre,
-       IFNULL(c.Direccion, ''),
-       c.Nit,
-       IFNULL(c.Email, ''),
-       IFNULL(c.Telefono, ''),
+        var sql = @"SELECT c.Id, c.Nombre, IFNULL(c.Direccion, ''), c.Nit, IFNULL(c.Email, ''), IFNULL(c.Telefono, ''),
        IFNULL(SUM(CASE WHEN f.Estado <> 'Anulada' THEN f.Saldo ELSE 0 END), 0) AS Balance,
        IFNULL(COUNT(CASE WHEN f.Estado <> 'Anulada' THEN f.Id END), 0) AS NumeroFacturas
 FROM Cliente c
 LEFT JOIN Factura f ON f.ClienteId = c.Id
-WHERE c.Activo = 1
-  AND (@search IS NULL OR trim(@search) = '' OR c.Nombre LIKE @filter OR c.Nit LIKE @filter OR c.Codigo LIKE @filter OR c.Email LIKE @filter)
-GROUP BY c.Id, c.Nombre, c.Direccion, c.Nit, c.Email, c.Telefono
-ORDER BY c.Nombre;";
+WHERE c.Activo = 1";
 
-        command.Parameters.AddWithValue("@search", (object?)search ?? DBNull.Value);
-        command.Parameters.AddWithValue("@filter", $"%{search?.Trim()}%");
+        if (!string.IsNullOrEmpty(search?.Trim()))
+        {
+            sql += @" AND (c.Nombre LIKE @filter OR c.Nit LIKE @filter OR c.Codigo LIKE @filter OR c.Email LIKE @filter)";
+            command.Parameters.AddWithValue("@filter", $"%{search.Trim()}%");
+        }
+
+        sql += " GROUP BY c.Id, c.Nombre, c.Direccion, c.Nit, c.Email, c.Telefono ORDER BY c.Nombre;";
+        command.CommandText = sql;
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
-            var name = reader.GetString(1);
-            var address = reader.GetString(2);
-            var email = reader.GetString(4);
-            var phone = reader.GetString(5);
-
             rows.Add(new CustomerGridRowDto
             {
                 Id = reader.GetInt64(0),
-                Cliente = string.IsNullOrWhiteSpace(address) ? name : $"{name} - {address}",
+                Cliente = reader.GetString(1),
                 NitCedula = reader.GetString(3),
-                Contacto = string.IsNullOrWhiteSpace(email) ? phone : $"{email} / {phone}",
+                Contacto = reader.GetString(4),
                 Balance = Convert.ToDecimal(reader.GetDouble(6)),
                 NumeroFacturas = Convert.ToInt32(reader.GetInt64(7))
             });

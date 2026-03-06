@@ -1,5 +1,4 @@
 using Embotelladora.Facturacion.Desktop.Data;
-using Microsoft.Data.Sqlite;
 
 namespace Embotelladora.Facturacion.Desktop.Features.Facturas;
 
@@ -72,39 +71,26 @@ LIMIT @limit;";
         return result;
     }
 
-    public List<PaymentSummaryDto> GetRecentPayments(int limit = 10)
+    public void Add(Payment payment)
     {
-        var result = new List<PaymentSummaryDto>();
-
         using var connection = AppDatabase.CreateConnection();
         connection.Open();
 
         using var command = connection.CreateCommand();
+        var fecha = payment.Fecha.ToString("yyyy-MM-dd");
+
         command.CommandText = @"
-SELECT p.Id, f.Numero, p.Fecha, c.Nombre, p.Valor, mp.Nombre
-FROM Pago p
-INNER JOIN Factura f ON f.Id = p.FacturaId
-INNER JOIN Cliente c ON c.Id = f.ClienteId
-LEFT JOIN MetodoPago mp ON mp.Id = p.MetodoPagoId
-ORDER BY p.Fecha DESC
-LIMIT @limit;";
-        command.Parameters.AddWithValue("@limit", limit);
+INSERT INTO Pago (FacturaId, Fecha, Valor, MetodoPagoId, Referencia, Notas)
+VALUES (@facturaId, @fecha, @valor, @metodoPagoId, @referencia, @notas);";
 
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            result.Add(new PaymentSummaryDto
-            {
-                Id = reader.GetInt64(0),
-                NumeroFactura = reader.GetString(1),
-                Fecha = reader.GetString(2),
-                Cliente = reader.GetString(3),
-                Valor = Convert.ToDecimal(reader.GetDouble(4)),
-                MetodoPago = reader.IsDBNull(5) ? "N/A" : reader.GetString(5)
-            });
-        }
+        command.Parameters.AddWithValue("@facturaId", payment.FacturaId);
+        command.Parameters.AddWithValue("@fecha", fecha);
+        command.Parameters.AddWithValue("@valor", payment.Monto);
+        command.Parameters.AddWithValue("@metodoPagoId", payment.MetodoPagoId);
+        command.Parameters.AddWithValue("@referencia", payment.Referencia ?? string.Empty);
+        command.Parameters.AddWithValue("@notas", payment.Notas ?? string.Empty);
 
-        return result;
+        command.ExecuteNonQuery();
     }
 
     public void CreatePayment(PaymentCreateRequest request)
@@ -159,37 +145,5 @@ WHERE Id = @facturaId;";
         }
 
         transaction.Commit();
-    }
-
-    public decimal GetTotalPaymentsToday()
-    {
-        using var connection = AppDatabase.CreateConnection();
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT IFNULL(SUM(Valor), 0) FROM Pago WHERE Fecha = CAST(CURRENT_TIMESTAMP AS DATE);";
-        return Convert.ToDecimal(command.ExecuteScalar());
-    }
-
-    public decimal GetTotalPaymentsMonth()
-    {
-        using var connection = AppDatabase.CreateConnection();
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = @"
-SELECT IFNULL(SUM(Valor), 0) FROM Pago 
-WHERE strftime('%Y-%m', Fecha) = strftime('%Y-%m', CURRENT_DATE);";
-        return Convert.ToDecimal(command.ExecuteScalar());
-    }
-
-    public int GetPendingInvoicesCount()
-    {
-        using var connection = AppDatabase.CreateConnection();
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM Factura WHERE Saldo > 0 AND Estado = 'Enviada';";
-        return Convert.ToInt32(command.ExecuteScalar());
     }
 }
