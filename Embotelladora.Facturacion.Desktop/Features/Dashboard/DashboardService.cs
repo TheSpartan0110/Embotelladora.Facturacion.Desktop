@@ -5,6 +5,14 @@ namespace Embotelladora.Facturacion.Desktop.Features.Dashboard;
 
 internal sealed class DashboardService
 {
+    private const string EstadoActualSql = @"CASE
+    WHEN Estado = 'Anulada' THEN 'Anulada'
+    WHEN Saldo <= 0 THEN 'Pagada'
+    WHEN Saldo < Total THEN 'Parcial'
+    WHEN Estado = 'Vencida' THEN 'Vencida'
+    ELSE 'Enviada'
+END";
+
     public DashboardSnapshot GetSnapshot()
     {
         using var connection = AppDatabase.CreateConnection();
@@ -13,10 +21,10 @@ internal sealed class DashboardService
         return new DashboardSnapshot
         {
             TotalFacturado = ExecuteScalarDecimal(connection, "SELECT IFNULL(SUM(Total), 0) FROM Factura WHERE Estado <> 'Anulada';"),
-            SaldoPendiente = ExecuteScalarDecimal(connection, "SELECT IFNULL(SUM(Saldo), 0) FROM Factura WHERE Estado IN ('Enviada', 'Parcial');"),
+            SaldoPendiente = ExecuteScalarDecimal(connection, $"SELECT IFNULL(SUM(Saldo), 0) FROM Factura WHERE Saldo > 0 AND ({EstadoActualSql}) IN ('Enviada', 'Parcial', 'Vencida');"),
             TotalPagos = ExecuteScalarDecimal(connection, "SELECT IFNULL(SUM(Valor), 0) FROM Pago;"),
             ClientesActivos = ExecuteScalarInt(connection, "SELECT COUNT(1) FROM Cliente WHERE Activo = 1;"),
-            FacturasPendientes = ExecuteScalarInt(connection, "SELECT COUNT(1) FROM Factura WHERE Estado IN ('Enviada', 'Parcial');"),
+            FacturasPendientes = ExecuteScalarInt(connection, $"SELECT COUNT(1) FROM Factura WHERE Saldo > 0 AND ({EstadoActualSql}) IN ('Enviada', 'Parcial', 'Vencida');"),
             PagosRegistrados = ExecuteScalarInt(connection, "SELECT COUNT(1) FROM Pago;")
         };
     }
@@ -28,10 +36,10 @@ internal sealed class DashboardService
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = @"
-SELECT Estado, COUNT(*) as Cantidad, IFNULL(SUM(Total), 0) as Total
+        command.CommandText = $@"
+SELECT {EstadoActualSql} as Estado, COUNT(*) as Cantidad, IFNULL(SUM(Total), 0) as Total
 FROM Factura
-GROUP BY Estado
+GROUP BY {EstadoActualSql}
 ORDER BY Total DESC;";
 
         using var reader = command.ExecuteReader();

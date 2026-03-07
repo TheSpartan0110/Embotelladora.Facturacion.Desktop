@@ -4,7 +4,7 @@ AppId={{A0E7A245-5C3E-47D7-B3FC-3A3BC9B4783A}
 AppName=AceitesPro Facturación
 AppVersion=1.0.0
 AppPublisher=AceitesPro
-DefaultDirName={autopf}\AceitesPro Facturacion
+DefaultDirName={localappdata}\Programs\AceitesPro Facturacion
 DefaultGroupName=AceitesPro Facturacion
 OutputDir=..\Embotelladora.Facturacion.Desktop\bin\Release\Installer
 OutputBaseFilename=AceitesPro-Facturacion-Setup
@@ -12,6 +12,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=lowest
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"

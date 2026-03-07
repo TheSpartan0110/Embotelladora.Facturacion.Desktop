@@ -55,6 +55,11 @@ internal sealed class InvoiceSummaryDto
     public decimal Total { get; set; }
     public decimal Saldo { get; set; }
     public string Estado { get; set; } = string.Empty;
+    public string EstadoSaldo => Saldo < 0
+        ? $"A favor ($ {Math.Abs(Saldo):N0})"
+        : Saldo == 0
+            ? "Pagado ($ 0)"
+            : $"Pendiente ($ {Saldo:N0})";
 }
 
 internal sealed class InvoiceListResumenDto
@@ -323,6 +328,16 @@ internal sealed class EstadisticaMensualDto
     public decimal PromedioFactura { get; set; }
     public decimal FacturaMayor { get; set; }
     public decimal FacturaMenor { get; set; }
+}
+
+internal sealed class BalanceProductoDto
+{
+    public long Id { get; set; }
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public decimal CantidadVendida { get; set; }
+    public decimal ValorVentasTotales { get; set; }
+    public decimal PrecioPromedioPago { get; set; }
 }
 
 // Inventario DTOs

@@ -85,7 +85,7 @@ WHERE Numero LIKE 'FAC-%';";
         
         if (!string.IsNullOrEmpty(search))
         {
-            sql += " AND (Nombre LIKE @search OR Codigo LIKE @search OR Categoria LIKE @search)";
+            sql += " AND (Nombre LIKE @search OR Codigo LIKE @search)";
             command.Parameters.AddWithValue("@search", $"%{search}%");
         }
         
@@ -116,7 +116,18 @@ WHERE Numero LIKE 'FAC-%';";
         connection.Open();
 
         using var command = connection.CreateCommand();
-        var sql = @"SELECT f.Id, f.Numero, f.Fecha, c.Nombre, f.Estado, f.Total
+        var sql = @"SELECT f.Id,
+       f.Numero,
+       f.Fecha,
+       c.Nombre,
+       CASE
+           WHEN f.Estado = 'Anulada' THEN 'Anulada'
+           WHEN f.Saldo <= 0 THEN 'Pagada'
+           WHEN f.Saldo < f.Total THEN 'Parcial'
+           WHEN f.Estado = 'Vencida' THEN 'Vencida'
+           ELSE 'Enviada'
+       END,
+       f.Total
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 WHERE 1=1";
@@ -167,7 +178,19 @@ WHERE 1=1";
 
         using var command = connection.CreateCommand();
         var sql = @"
-SELECT f.Id, f.Numero, f.Fecha, c.Nombre, f.Total, f.Saldo, f.Estado
+SELECT f.Id,
+       f.Numero,
+       f.Fecha,
+       c.Nombre,
+       f.Total,
+       f.Saldo,
+       CASE
+           WHEN f.Estado = 'Anulada' THEN 'Anulada'
+           WHEN f.Saldo <= 0 THEN 'Pagada'
+           WHEN f.Saldo < f.Total THEN 'Parcial'
+           WHEN f.Estado = 'Vencida' THEN 'Vencida'
+           ELSE 'Enviada'
+       END
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
 WHERE 1=1";
@@ -217,7 +240,10 @@ SELECT
     COUNT(*),
     IFNULL(SUM(Total), 0),
     IFNULL(SUM(CASE WHEN Saldo > 0 THEN Saldo ELSE 0 END), 0),
-    IFNULL(SUM(CASE WHEN Estado = 'Pagada' THEN 1 ELSE 0 END), 0)
+    IFNULL(SUM(CASE
+        WHEN Estado <> 'Anulada' AND Saldo <= 0 THEN 1
+        ELSE 0
+    END), 0)
 FROM Factura;";
 
         using var reader = command.ExecuteReader();
@@ -242,7 +268,19 @@ FROM Factura;";
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-SELECT f.Numero, f.Fecha, c.Nombre, f.Total, f.Saldo, f.Estado, f.Notas,
+SELECT f.Numero,
+       f.Fecha,
+       c.Nombre,
+       f.Total,
+       f.Saldo,
+       CASE
+           WHEN f.Estado = 'Anulada' THEN 'Anulada'
+           WHEN f.Saldo <= 0 THEN 'Pagada'
+           WHEN f.Saldo < f.Total THEN 'Parcial'
+           WHEN f.Estado = 'Vencida' THEN 'Vencida'
+           ELSE 'Enviada'
+       END,
+       f.Notas,
        IFNULL(mp.Nombre, '-') AS MetodoPago, f.Subtotal
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
@@ -335,7 +373,13 @@ SELECT f.Id,
        IFNULL(c.Nit, ''),
        IFNULL(c.Direccion, ''),
        IFNULL(mp.Nombre, '-'),
-       IFNULL(f.Estado, ''),
+       CASE
+           WHEN f.Estado = 'Anulada' THEN 'Anulada'
+           WHEN f.Saldo <= 0 THEN 'Pagada'
+           WHEN f.Saldo < f.Total THEN 'Parcial'
+           WHEN f.Estado = 'Vencida' THEN 'Vencida'
+           ELSE 'Enviada'
+       END,
        IFNULL(f.Subtotal, 0),
        IFNULL(f.Retencion, 0),
        IFNULL(f.Total, 0),

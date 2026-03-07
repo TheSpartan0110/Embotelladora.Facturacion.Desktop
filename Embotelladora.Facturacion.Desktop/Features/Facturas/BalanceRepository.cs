@@ -182,6 +182,15 @@ LIMIT @limite;";
     public List<BalanceFacturaDto> GetFacturas(DateTime inicio, DateTime fin)
         => GetFacturasForRange((inicio, fin));
 
+    public List<BalanceProductoDto> GetBalanceProductos(BalancePeriodo periodo)
+        => GetBalanceProductosForRange(GetDateRange(periodo));
+
+    public List<BalanceProductoDto> GetBalanceProductos(DateTime fecha)
+        => GetBalanceProductosForRange((fecha, fecha));
+
+    public List<BalanceProductoDto> GetBalanceProductos(DateTime inicio, DateTime fin)
+        => GetBalanceProductosForRange((inicio, fin));
+
     private List<BalanceFacturaDto> GetFacturasForRange((DateTime? Inicio, DateTime? Fin) rango)
     {
         var result = new List<BalanceFacturaDto>();
@@ -220,6 +229,50 @@ ORDER BY f.Numero;";
                 Total = ToDecimal(reader, 4),
                 Saldo = ToDecimal(reader, 5),
                 Estado = reader.GetString(6)
+            });
+        }
+
+        return result;
+    }
+
+    private List<BalanceProductoDto> GetBalanceProductosForRange((DateTime? Inicio, DateTime? Fin) rango)
+    {
+        var result = new List<BalanceProductoDto>();
+
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        var where = BuildDateWhereClause("f.Fecha", rango);
+
+        using var command = connection.CreateCommand();
+        command.CommandText = $@"
+SELECT
+    p.Id,
+    p.Codigo,
+    p.Nombre,
+    IFNULL(SUM(i.Cantidad), 0) as CantidadVendida,
+    IFNULL(SUM(i.TotalLinea), 0) as ValorVentasTotales,
+    IFNULL(AVG(i.PrecioUnitario), 0) as PrecioPromedioPago
+FROM ItemFactura i
+INNER JOIN Factura f ON f.Id = i.FacturaId
+INNER JOIN ProductoExt p ON p.Id = i.ProductoId
+WHERE {where}
+GROUP BY p.Id, p.Codigo, p.Nombre
+ORDER BY ValorVentasTotales DESC, CantidadVendida DESC, p.Codigo;";
+
+        AddDateParameters(command, rango);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new BalanceProductoDto
+            {
+                Id = reader.GetInt64(0),
+                Codigo = reader.GetString(1),
+                Nombre = reader.GetString(2),
+                CantidadVendida = ToDecimal(reader, 3),
+                ValorVentasTotales = ToDecimal(reader, 4),
+                PrecioPromedioPago = ToDecimal(reader, 5)
             });
         }
 

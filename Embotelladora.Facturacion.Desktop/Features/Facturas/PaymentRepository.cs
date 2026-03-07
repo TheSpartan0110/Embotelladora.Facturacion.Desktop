@@ -16,7 +16,7 @@ internal sealed class PaymentRepository
 SELECT f.Id, f.Numero, c.Nombre, f.Saldo
 FROM Factura f
 INNER JOIN Cliente c ON c.Id = f.ClienteId
-WHERE f.Saldo > 0 AND f.Estado IN ('Enviada', 'Pendiente')
+WHERE f.Saldo > 0 AND f.Estado <> 'Anulada'
 ORDER BY f.Fecha DESC, f.Numero DESC;";
 
         using var reader = command.ExecuteReader();
@@ -148,6 +148,30 @@ VALUES (@facturaId, @fecha, @valor, @metodoPagoId, @referencia, @notas);";
 
         using var transaction = connection.BeginTransaction();
 
+        using var invoiceCommand = connection.CreateCommand();
+        invoiceCommand.Transaction = transaction;
+        invoiceCommand.CommandText = @"
+SELECT Total, Saldo, Estado
+FROM Factura
+WHERE Id = @facturaId;";
+        invoiceCommand.Parameters.AddWithValue("@facturaId", request.FacturaId);
+
+        using var invoiceReader = invoiceCommand.ExecuteReader();
+        if (!invoiceReader.Read())
+        {
+            throw new InvalidOperationException("La factura no fue encontrada.");
+        }
+
+        var totalFactura = Convert.ToDecimal(invoiceReader.GetValue(0));
+        var saldoActual = Convert.ToDecimal(invoiceReader.GetValue(1));
+        var estadoActual = invoiceReader.GetString(2);
+        invoiceReader.Close();
+
+        if (estadoActual == "Anulada")
+        {
+            throw new InvalidOperationException("No se pueden registrar pagos sobre una factura anulada.");
+        }
+
         // Insertar el pago
         using var paymentCommand = connection.CreateCommand();
         paymentCommand.Transaction = transaction;
@@ -165,32 +189,20 @@ SELECT last_insert_rowid();";
 
         var paymentId = Convert.ToInt64(paymentCommand.ExecuteScalar());
 
-        // Actualizar el saldo de la factura
+        var nuevoSaldo = saldoActual - request.Valor;
+
+        // Actualizar el saldo y estado de la factura
         using var updateCommand = connection.CreateCommand();
         updateCommand.Transaction = transaction;
         updateCommand.CommandText = @"
 UPDATE Factura
-SET Saldo = Saldo - @valor
+SET Saldo = @saldo,
+    Estado = @estado
 WHERE Id = @facturaId;";
-        updateCommand.Parameters.AddWithValue("@valor", request.Valor);
+        updateCommand.Parameters.AddWithValue("@saldo", nuevoSaldo);
+        updateCommand.Parameters.AddWithValue("@estado", ResolveInvoiceStatus(totalFactura, nuevoSaldo, estadoActual));
         updateCommand.Parameters.AddWithValue("@facturaId", request.FacturaId);
         updateCommand.ExecuteNonQuery();
-
-        // Verificar si la factura está pagada completamente
-        using var checkCommand = connection.CreateCommand();
-        checkCommand.Transaction = transaction;
-        checkCommand.CommandText = "SELECT Saldo FROM Factura WHERE Id = @id;";
-        checkCommand.Parameters.AddWithValue("@id", request.FacturaId);
-        var newSaldo = Convert.ToDecimal(checkCommand.ExecuteScalar());
-
-        if (newSaldo <= 0)
-        {
-            using var statusCommand = connection.CreateCommand();
-            statusCommand.Transaction = transaction;
-            statusCommand.CommandText = "UPDATE Factura SET Estado = 'Pagada' WHERE Id = @id;";
-            statusCommand.Parameters.AddWithValue("@id", request.FacturaId);
-            statusCommand.ExecuteNonQuery();
-        }
 
         transaction.Commit();
     }
@@ -205,7 +217,11 @@ WHERE Id = @facturaId;";
         // Obtener datos del pago
         using var getCommand = connection.CreateCommand();
         getCommand.Transaction = transaction;
-        getCommand.CommandText = "SELECT FacturaId, Valor FROM Pago WHERE Id = @id;";
+        getCommand.CommandText = @"
+SELECT p.FacturaId, p.Valor, f.Total, f.Saldo, f.Estado
+FROM Pago p
+INNER JOIN Factura f ON f.Id = p.FacturaId
+WHERE p.Id = @id;";
         getCommand.Parameters.AddWithValue("@id", paymentId);
 
         using var reader = getCommand.ExecuteReader();
@@ -215,20 +231,13 @@ WHERE Id = @facturaId;";
         }
 
         var facturaId = reader.GetInt64(0);
-        var valor = reader.GetDouble(1);
+        var valor = Convert.ToDecimal(reader.GetValue(1));
+        var totalFactura = Convert.ToDecimal(reader.GetValue(2));
+        var saldoActual = Convert.ToDecimal(reader.GetValue(3));
+        var estadoActual = reader.GetString(4);
         reader.Close();
 
-        // Devolver el saldo a la factura
-        using var updateCommand = connection.CreateCommand();
-        updateCommand.Transaction = transaction;
-        updateCommand.CommandText = @"
-UPDATE Factura
-SET Saldo = Saldo + @valor,
-    Estado = CASE WHEN Saldo + @valor > 0 THEN 'Pendiente' ELSE Estado END
-WHERE Id = @facturaId;";
-        updateCommand.Parameters.AddWithValue("@valor", valor);
-        updateCommand.Parameters.AddWithValue("@facturaId", facturaId);
-        updateCommand.ExecuteNonQuery();
+        var nuevoSaldo = saldoActual + valor;
 
         // Eliminar el pago
         using var deleteCommand = connection.CreateCommand();
@@ -237,6 +246,44 @@ WHERE Id = @facturaId;";
         deleteCommand.Parameters.AddWithValue("@id", paymentId);
         deleteCommand.ExecuteNonQuery();
 
+        // Devolver el saldo y recalcular el estado de la factura
+        using var updateCommand = connection.CreateCommand();
+        updateCommand.Transaction = transaction;
+        updateCommand.CommandText = @"
+UPDATE Factura
+SET Saldo = @saldo,
+    Estado = @estado
+WHERE Id = @facturaId;";
+        updateCommand.Parameters.AddWithValue("@saldo", nuevoSaldo);
+        updateCommand.Parameters.AddWithValue("@estado", ResolveInvoiceStatus(totalFactura, nuevoSaldo, estadoActual));
+        updateCommand.Parameters.AddWithValue("@facturaId", facturaId);
+        updateCommand.ExecuteNonQuery();
+
         transaction.Commit();
+    }
+
+    private static string ResolveInvoiceStatus(decimal totalFactura, decimal saldo, string? estadoActual)
+    {
+        if (string.Equals(estadoActual, "Anulada", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Anulada";
+        }
+
+        if (saldo <= 0)
+        {
+            return "Pagada";
+        }
+
+        if (saldo < totalFactura)
+        {
+            return "Parcial";
+        }
+
+        if (string.Equals(estadoActual, "Vencida", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Vencida";
+        }
+
+        return "Enviada";
     }
 }

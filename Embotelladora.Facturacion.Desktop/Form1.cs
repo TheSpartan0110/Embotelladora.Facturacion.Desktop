@@ -71,6 +71,8 @@ public partial class Form1 : Form
     private Label _lblInvoiceItemsCount = null!;
     private Label _lblInvoiceSummaryDate = null!;
     private Label _lblItemStock = null!;
+    private List<InvoiceCustomerLookupDto> _invoiceCustomerCatalog = [];
+    private List<ProductLookupDto> _invoiceProductCatalog = [];
 
     // Invoice list module fields
     private Label _lblInvoicesTotalFacturas = null!;
@@ -119,9 +121,11 @@ public partial class Form1 : Form
     private DataGridView _gridBalanceMensual = null!;
     private DataGridView _gridBalanceFacturas = null!;
     private DataGridView _gridBalancePagos = null!;
+    private DataGridView _gridBalanceProductos = null!;
     private Label _lblBalanceDetalleTitulo = null!;
     private Label _lblBalanceFacturasTitulo = null!;
     private Label _lblBalancePagosTitulo = null!;
+    private Label _lblBalanceProductosTitulo = null!;
     private Label _lblBalanceInfo = null!;
     private DateTimePicker _dtpBalanceFecha = null!;
     private readonly Dictionary<BalancePeriodo, Button> _balancePeriodButtons = [];
@@ -469,6 +473,7 @@ public partial class Form1 : Form
             PlaceholderText = "Buscar por número de factura o cliente...",
             Font = new Font("Segoe UI", 10)
         };
+        ConfigureFilterAutoComplete(_txtSearchInvoices);
         _txtSearchInvoices.TextChanged += (_, _) => LoadInvoicesList();
 
         _cmbEstadoFilter = new ComboBox
@@ -814,6 +819,7 @@ public partial class Form1 : Form
             BorderStyle = BorderStyle.FixedSingle,
             Margin = Padding.Empty
         };
+        ConfigureFilterAutoComplete(_txtSearchCustomer);
         _txtSearchCustomer.TextChanged += (_, _) => LoadCustomers(_txtSearchCustomer.Text);
 
         var btnClearSearch = new Button
@@ -911,7 +917,7 @@ public partial class Form1 : Form
             Margin = new Padding(12, 12, 6, 12),
             Padding = Padding.Empty
         };
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 188));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
 
@@ -922,19 +928,23 @@ public partial class Form1 : Form
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
             Padding = new Padding(16),
-            Margin = new Padding(0, 0, 0, 12)
+            Margin = new Padding(0, 0, 0, 12),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink
         };
 
         var infoLayout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             ColumnCount = 1,
             RowCount = 2,
             Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink
         };
         infoLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        infoLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        infoLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var infoTitle = new Label
         {
@@ -951,7 +961,9 @@ public partial class Form1 : Form
             ColumnCount = 2,
             RowCount = 4,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 12, 0, 0)
+            Padding = new Padding(0, 12, 0, 0),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink
         };
         infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -961,7 +973,14 @@ public partial class Form1 : Form
         infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
         infoGrid.Controls.Add(new Label { Text = "Cliente *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
-        _cmbInvoiceCustomer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _cmbInvoiceCustomer = new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle = ComboBoxStyle.DropDown,
+            AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+            AutoCompleteSource = AutoCompleteSource.CustomSource
+        };
+        _cmbInvoiceCustomer.Validating += (_, _) => SyncInvoiceCustomerSelectionFromText();
         infoGrid.Controls.Add(_cmbInvoiceCustomer, 0, 1);
 
         infoGrid.Controls.Add(new Label { Text = "Método de Pago *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 1, 0);
@@ -969,7 +988,13 @@ public partial class Form1 : Form
         infoGrid.Controls.Add(_cmbInvoicePaymentMethod, 1, 1);
 
         infoGrid.Controls.Add(new Label { Text = "Fecha *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 2);
-        _dtpInvoiceDate = new DateTimePicker { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short };
+        _dtpInvoiceDate = new DateTimePicker
+        {
+            Dock = DockStyle.Fill,
+            Format = DateTimePickerFormat.Custom,
+            CustomFormat = "dd/MM/yyyy",
+            ShowUpDown = false
+        };
         _dtpInvoiceDate.ValueChanged += (_, _) => UpdateInvoiceSummaryDate();
         infoGrid.Controls.Add(_dtpInvoiceDate, 0, 3);
 
@@ -1032,8 +1057,15 @@ public partial class Form1 : Form
         productsTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         productsTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
 
-        _cmbItemProduct = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _cmbItemProduct = new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle = ComboBoxStyle.DropDown,
+            AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+            AutoCompleteSource = AutoCompleteSource.CustomSource
+        };
         _cmbItemProduct.SelectedIndexChanged += (_, _) => OnProductChanged();
+        _cmbItemProduct.Validating += (_, _) => SyncInvoiceProductSelectionFromText();
         productsTopBar.Controls.Add(_cmbItemProduct, 0, 0);
 
         var btnAddItem = new Button
@@ -2266,7 +2298,11 @@ public partial class Form1 : Form
             _btnHeaderAction.Text = "+ Nuevo Cliente";
             _btnHeaderAction.Visible = true;
             _headerAction = OpenNewCustomerDialog;
-            ShowAnimatedView(_customersView, () => LoadCustomers(_txtSearchCustomer.Text));
+            ShowAnimatedView(_customersView, () =>
+            {
+                RefreshCustomerFilterAutoComplete();
+                LoadCustomers(_txtSearchCustomer.Text);
+            });
             return;
         }
 
@@ -2277,7 +2313,11 @@ public partial class Form1 : Form
             _btnHeaderAction.Text = "+ Nueva Factura";
             _btnHeaderAction.Visible = true;
             _headerAction = () => ShowModule("NuevaFactura");
-            ShowAnimatedView(_invoicesView, LoadInvoicesList);
+            ShowAnimatedView(_invoicesView, () =>
+            {
+                RefreshInvoicesFilterAutoComplete();
+                LoadInvoicesList();
+            });
             return;
         }
 
@@ -2520,6 +2560,33 @@ public partial class Form1 : Form
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
     }
 
+    private static void ConfigureFilterAutoComplete(TextBox textBox)
+    {
+        textBox.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        textBox.AutoCompleteSource = AutoCompleteSource.CustomSource;
+        textBox.AutoCompleteCustomSource = [];
+    }
+
+    private static void SetFilterAutoCompleteValues(TextBox textBox, IEnumerable<string?> values)
+    {
+        if (textBox.IsDisposed)
+        {
+            return;
+        }
+
+        var source = new AutoCompleteStringCollection();
+        source.AddRange(
+        [
+            .. values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.Trim())
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase)
+        ]);
+
+        textBox.AutoCompleteCustomSource = source;
+    }
+
     private void LoadDashboard()
     {
         var snapshot = _dashboardService.GetSnapshot();
@@ -2677,6 +2744,74 @@ public partial class Form1 : Form
         if (parts.Length == 2 && parts[0].Length > 3)
             return parts[0][..3] + " " + (parts[1].Length == 4 ? parts[1][2..] : parts[1]);
         return label;
+    }
+
+    private void RefreshCustomerFilterAutoComplete()
+    {
+        SetFilterAutoCompleteValues(
+            _txtSearchCustomer,
+            _customerRepository
+                .GetAll(null)
+                .SelectMany(customer => new[]
+                {
+                    customer.Codigo,
+                    customer.Nombre,
+                    customer.Nit,
+                    customer.Email
+                }));
+    }
+
+    private void RefreshInvoicesFilterAutoComplete()
+    {
+        SetFilterAutoCompleteValues(
+            _txtSearchInvoices,
+            _invoiceRepository
+                .GetGridRows()
+                .SelectMany(invoice => new[]
+                {
+                    invoice.Numero,
+                    invoice.Cliente
+                }));
+    }
+
+    private void RefreshPaymentsFilterAutoComplete()
+    {
+        SetFilterAutoCompleteValues(
+            _txtSearchPayments,
+            _paymentRepository
+                .GetPaymentHistory()
+                .SelectMany(payment => new[]
+                {
+                    payment.NumeroFactura,
+                    payment.Cliente,
+                    payment.MetodoPago
+                }));
+    }
+
+    private void RefreshCarteraFilterAutoComplete()
+    {
+        SetFilterAutoCompleteValues(
+            _txtSearchCartera,
+            _carteraRepository
+                .GetFacturasPendientes()
+                .SelectMany(invoice => new[]
+                {
+                    invoice.Numero,
+                    invoice.Cliente
+                }));
+    }
+
+    private void RefreshInventarioFilterAutoComplete()
+    {
+        SetFilterAutoCompleteValues(
+            _txtSearchInventario,
+            _inventarioRepository
+                .GetProductos()
+                .SelectMany(product => new[]
+                {
+                    product.Codigo,
+                    product.Nombre
+                }));
     }
 
     private void LoadCustomers(string? search)
@@ -2885,9 +3020,25 @@ public partial class Form1 : Form
     private void LoadInvoiceModule()
     {
         var customers = _invoiceRepository.GetActiveCustomers();
+        _invoiceCustomerCatalog = customers;
         _cmbInvoiceCustomer.DataSource = customers;
         _cmbInvoiceCustomer.DisplayMember = nameof(InvoiceCustomerLookupDto.DisplayName);
         _cmbInvoiceCustomer.ValueMember = nameof(InvoiceCustomerLookupDto.Id);
+        var customerAutoCompleteValues = new AutoCompleteStringCollection();
+        customerAutoCompleteValues.AddRange(
+        [
+            .. customers
+                .SelectMany(customer => new[]
+                {
+                    customer.DisplayName,
+                    customer.Nombre,
+                    customer.Nit
+                })
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToArray()
+        ]);
+        _cmbInvoiceCustomer.AutoCompleteCustomSource = customerAutoCompleteValues;
 
         var paymentMethods = _invoiceRepository.GetPaymentMethods();
         _cmbInvoicePaymentMethod.DataSource = paymentMethods;
@@ -2901,12 +3052,134 @@ public partial class Form1 : Form
             MessageBox.Show("No hay productos registrados en la base de datos. Por favor, verifica la inicialización.", "Sin Productos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
-        _cmbItemProduct.DataSource = products;
-        _cmbItemProduct.DisplayMember = nameof(ProductLookupDto.DisplayName);
-        _cmbItemProduct.ValueMember = nameof(ProductLookupDto.Id);
+        _invoiceProductCatalog = products;
+        BindInvoiceProducts(products);
 
         LoadInvoicesList();
         ClearInvoiceForm();
+    }
+
+    private void BindInvoiceProducts(List<ProductLookupDto> products)
+    {
+        var selectedProductId = _cmbItemProduct.SelectedItem is ProductLookupDto selectedProduct
+            ? selectedProduct.Id
+            : _cmbItemProduct.SelectedValue as long?;
+
+        _cmbItemProduct.DataSource = null;
+        _cmbItemProduct.DisplayMember = nameof(ProductLookupDto.DisplayName);
+        _cmbItemProduct.ValueMember = nameof(ProductLookupDto.Id);
+        _cmbItemProduct.DataSource = products;
+
+        var autoCompleteValues = new AutoCompleteStringCollection();
+        autoCompleteValues.AddRange(
+        [
+            .. products
+                .SelectMany(product => new[]
+                {
+                    product.DisplayName,
+                    product.Codigo,
+                    product.Nombre
+                })
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToArray()
+        ]);
+        _cmbItemProduct.AutoCompleteCustomSource = autoCompleteValues;
+
+        if (selectedProductId.HasValue)
+        {
+            for (var i = 0; i < _cmbItemProduct.Items.Count; i++)
+            {
+                if (_cmbItemProduct.Items[i] is ProductLookupDto product && product.Id == selectedProductId.Value)
+                {
+                    _cmbItemProduct.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        if (_cmbItemProduct.Items.Count > 0)
+        {
+            _cmbItemProduct.SelectedIndex = 0;
+        }
+    }
+
+    private void SyncInvoiceCustomerSelectionFromText()
+    {
+        var searchText = _cmbInvoiceCustomer.Text.Trim();
+        if (string.IsNullOrWhiteSpace(searchText) || _invoiceCustomerCatalog.Count == 0)
+        {
+            return;
+        }
+
+        var match = _invoiceCustomerCatalog.FirstOrDefault(customer =>
+            customer.DisplayName.Equals(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+            customer.Nombre.Equals(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+            customer.Nit.Equals(searchText, StringComparison.CurrentCultureIgnoreCase));
+
+        if (match is null)
+        {
+            match = _invoiceCustomerCatalog.FirstOrDefault(customer =>
+                customer.DisplayName.Contains(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+                customer.Nombre.Contains(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+                customer.Nit.Contains(searchText, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        if (match is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _cmbInvoiceCustomer.Items.Count; i++)
+        {
+            if (_cmbInvoiceCustomer.Items[i] is InvoiceCustomerLookupDto customer && customer.Id == match.Id)
+            {
+                _cmbInvoiceCustomer.SelectedIndex = i;
+                _cmbInvoiceCustomer.Text = customer.DisplayName;
+                _cmbInvoiceCustomer.SelectionStart = _cmbInvoiceCustomer.Text.Length;
+                _cmbInvoiceCustomer.SelectionLength = 0;
+                return;
+            }
+        }
+    }
+
+    private void SyncInvoiceProductSelectionFromText()
+    {
+        var searchText = _cmbItemProduct.Text.Trim();
+        if (string.IsNullOrWhiteSpace(searchText) || _invoiceProductCatalog.Count == 0)
+        {
+            return;
+        }
+
+        var match = _invoiceProductCatalog.FirstOrDefault(product =>
+            product.DisplayName.Equals(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+            product.Codigo.Equals(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+            product.Nombre.Equals(searchText, StringComparison.CurrentCultureIgnoreCase));
+
+        if (match is null)
+        {
+            match = _invoiceProductCatalog.FirstOrDefault(product =>
+                product.DisplayName.Contains(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+                product.Codigo.Contains(searchText, StringComparison.CurrentCultureIgnoreCase) ||
+                product.Nombre.Contains(searchText, StringComparison.CurrentCultureIgnoreCase));
+        }
+
+        if (match is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < _cmbItemProduct.Items.Count; i++)
+        {
+            if (_cmbItemProduct.Items[i] is ProductLookupDto product && product.Id == match.Id)
+            {
+                _cmbItemProduct.SelectedIndex = i;
+                _cmbItemProduct.Text = product.DisplayName;
+                _cmbItemProduct.SelectionStart = _cmbItemProduct.Text.Length;
+                _cmbItemProduct.SelectionLength = 0;
+                return;
+            }
+        }
     }
 
     private void LoadInvoicesList()
@@ -3610,6 +3883,8 @@ public partial class Form1 : Form
 
     private void AddInvoiceItem()
     {
+        SyncInvoiceProductSelectionFromText();
+
         if (_cmbItemProduct.SelectedItem is not ProductLookupDto product)
         {
             MessageBox.Show("Selecciona un producto.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -3632,8 +3907,8 @@ public partial class Form1 : Form
         var price = _numItemPrice.Value;
         var total = Math.Round(quantity * price, 0);
 
-        // Verificar si el producto ya existe en los ítems
-        var existingItem = _invoiceItems.FirstOrDefault(x => x.ProductId == product.Id);
+        // Verificar si el producto ya existe en los ítems con el mismo precio
+        var existingItem = _invoiceItems.FirstOrDefault(x => x.ProductId == product.Id && x.PrecioUnitario == price);
         if (existingItem != null)
         {
             existingItem.Cantidad += quantity;
@@ -3734,6 +4009,8 @@ public partial class Form1 : Form
 
     private void SaveInvoice()
     {
+        SyncInvoiceCustomerSelectionFromText();
+
         if (_cmbInvoiceCustomer.SelectedItem is not InvoiceCustomerLookupDto customer)
         {
             MessageBox.Show("Debes seleccionar un cliente activo.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -3939,6 +4216,7 @@ ORDER BY Codigo;";
             PlaceholderText = "Buscar por número de factura, cliente o método de pago...",
             Font = new Font("Segoe UI", 10)
         };
+        ConfigureFilterAutoComplete(_txtSearchPayments);
         _txtSearchPayments.TextChanged += (_, _) => LoadPaymentsGrid(_txtSearchPayments.Text);
 
         var btnClearSearch = new Button
@@ -4257,6 +4535,8 @@ ORDER BY Codigo;";
 
     private void LoadPaymentsList()
     {
+        RefreshPaymentsFilterAutoComplete();
+
         var resumen = _paymentRepository.GetResumen();
         _lblPaymentsTotalPagos.Text = resumen.TotalPagos.ToString("N0");
         _lblPaymentsMontoTotal.Text = $"$ {resumen.MontoTotal:N0}";
@@ -4569,6 +4849,7 @@ ORDER BY Codigo;";
             PlaceholderText = "Buscar por número de factura o cliente...",
             Font = new Font("Segoe UI", 10)
         };
+        ConfigureFilterAutoComplete(_txtSearchCartera);
         _txtSearchCartera.TextChanged += (_, _) => LoadFacturasPendientes(_txtSearchCartera.Text);
 
         var btnClearSearch = new Button
@@ -4768,6 +5049,8 @@ ORDER BY Codigo;";
 
     private void LoadCartera()
     {
+        RefreshCarteraFilterAutoComplete();
+
         var resumen = _carteraRepository.GetResumen();
         _lblCarteraClientes.Text = resumen.ClientesConSaldo.ToString("N0");
         _lblCarteraFacturas.Text = resumen.FacturasPendientes.ToString("N0");
@@ -4915,17 +5198,19 @@ ORDER BY Codigo;";
         // 2. NAVEGADOR DE PERÍODOS
         mainLayout.Controls.Add(BuildBalancePeriodNavigator(), 0, 1);
 
-        // 3. BALANCE DETALLE Y FACTURAS/PAGOS
+        // 3. BLOQUE CENTRAL 2x2
         var analyticsLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 1,
+            RowCount = 2,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
-        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        analyticsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        analyticsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        analyticsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
         var balanceMensualCard = new RoundedPanel
         {
@@ -4966,18 +5251,6 @@ ORDER BY Codigo;";
 
         analyticsLayout.Controls.Add(balanceMensualCard, 0, 0);
 
-        // Panel derecho: Facturas del período + Pagos de factura seleccionada
-        var rightSplit = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = new Padding(6, 0, 0, 0),
-            Padding = Padding.Empty
-        };
-        rightSplit.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        rightSplit.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
-
         // Facturas del período
         var facturasCard = new RoundedPanel
         {
@@ -4986,7 +5259,7 @@ ORDER BY Codigo;";
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
             Padding = new Padding(16),
-            Margin = new Padding(0, 0, 0, 6)
+            Margin = new Padding(6, 0, 0, 6)
         };
 
         _lblBalanceFacturasTitulo = new Label
@@ -5016,7 +5289,7 @@ ORDER BY Codigo;";
         _gridBalanceFacturas.SelectionChanged += (_, _) => OnBalanceFacturaSelected();
         AddGridWithTopMargin(facturasCard, _gridBalanceFacturas, 20);
 
-        rightSplit.Controls.Add(facturasCard, 0, 0);
+        analyticsLayout.Controls.Add(facturasCard, 1, 0);
 
         // Pagos de la factura seleccionada
         var pagosCard = new RoundedPanel
@@ -5026,7 +5299,7 @@ ORDER BY Codigo;";
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
             Padding = new Padding(16),
-            Margin = new Padding(0, 6, 0, 0)
+            Margin = new Padding(0, 6, 6, 0)
         };
 
         _lblBalancePagosTitulo = new Label
@@ -5055,8 +5328,44 @@ ORDER BY Codigo;";
         ConfigureGridStyle(_gridBalancePagos);
         AddGridWithTopMargin(pagosCard, _gridBalancePagos, 20);
 
-        rightSplit.Controls.Add(pagosCard, 0, 1);
-        analyticsLayout.Controls.Add(rightSplit, 1, 0);
+        analyticsLayout.Controls.Add(pagosCard, 0, 1);
+
+        var productosCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(14, 10, 14, 10),
+            Margin = new Padding(6, 6, 0, 0)
+        };
+
+        _lblBalanceProductosTitulo = new Label
+        {
+            Text = "📦 Productos Vendidos",
+            Dock = DockStyle.Top,
+            Height = 24,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        productosCard.Controls.Add(_lblBalanceProductosTitulo);
+
+        _gridBalanceProductos = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        ConfigureGridStyle(_gridBalanceProductos);
+        AddGridWithTopMargin(productosCard, _gridBalanceProductos, 12);
+        analyticsLayout.Controls.Add(productosCard, 1, 1);
 
         mainLayout.Controls.Add(analyticsLayout, 0, 2);
 
@@ -5096,7 +5405,6 @@ ORDER BY Codigo;";
         };
         infoPanel.Controls.Add(_lblBalanceInfo);
         infoCard.Controls.Add(infoPanel);
-
         mainLayout.Controls.Add(infoCard, 0, 3);
 
         // Cargar datos del balance
@@ -5290,6 +5598,16 @@ ORDER BY Codigo;";
         ConfigureBalanceFacturasGrid();
         SelectFirstBalanceFactura();
 
+        var productosBalance = _balanceFechaEspecifica is { } fechaProductos
+            ? _balanceRepository.GetBalanceProductos(fechaProductos)
+            : _balanceRepository.GetBalanceProductos(_balancePeriodoSeleccionado);
+
+        _gridBalanceProductos.DataSource = productosBalance;
+        _lblBalanceProductosTitulo.Text = _balanceFechaEspecifica is { } fechaTitulo
+            ? $"📦 Productos vendidos — {fechaTitulo:dd/MM/yyyy}"
+            : $"📦 Productos vendidos ({GetBalancePeriodName(_balancePeriodoSeleccionado)})";
+        ConfigureBalanceProductosGrid();
+
         var promedioFactura = resumen.FacturasEmitidas > 0
             ? resumen.TotalFacturado / resumen.FacturasEmitidas
             : 0m;
@@ -5334,9 +5652,18 @@ ORDER BY Codigo;";
             ? _balanceRepository.GetFacturas(inicio)
             : _balanceRepository.GetFacturas(inicio, fin);
 
+        var productos = inicio == fin
+            ? _balanceRepository.GetBalanceProductos(inicio)
+            : _balanceRepository.GetBalanceProductos(inicio, fin);
+
         _lblBalanceFacturasTitulo.Text = $"📄 Facturas — {detalle.MesNombre}";
         _gridBalanceFacturas.DataSource = facturas;
         ConfigureBalanceFacturasGrid();
+
+        _lblBalanceProductosTitulo.Text = $"📦 Productos vendidos — {detalle.MesNombre}";
+        _gridBalanceProductos.DataSource = productos;
+        ConfigureBalanceProductosGrid();
+
         SelectFirstBalanceFactura();
     }
 
@@ -5400,6 +5727,65 @@ ORDER BY Codigo;";
         }
 
         return false;
+    }
+
+    private void ConfigureBalanceProductosGrid()
+    {
+        if (_gridBalanceProductos.Columns.Count == 0)
+        {
+            return;
+        }
+
+        if (_gridBalanceProductos.Columns["Id"] is { } idColumn)
+        {
+            idColumn.Visible = false;
+        }
+
+        if (_gridBalanceProductos.Columns["Codigo"] is { } codigoColumn)
+        {
+            codigoColumn.HeaderText = "Código";
+            codigoColumn.Width = 90;
+        }
+
+        if (_gridBalanceProductos.Columns["Nombre"] is { } nombreColumn)
+        {
+            nombreColumn.HeaderText = "Producto";
+            nombreColumn.MinimumWidth = 180;
+        }
+
+        if (_gridBalanceProductos.Columns["CantidadVendida"] is { } cantidadColumn)
+        {
+            cantidadColumn.HeaderText = "Cant. Vendida";
+            cantidadColumn.DefaultCellStyle.Format = "N0";
+            cantidadColumn.Width = 90;
+        }
+
+        if (_gridBalanceProductos.Columns["ValorVentasTotales"] is { } ventasColumn)
+        {
+            ventasColumn.HeaderText = "Ventas Totales";
+            ventasColumn.DefaultCellStyle.Format = "C0";
+            ventasColumn.Width = 110;
+        }
+
+        if (_gridBalanceProductos.Columns["PrecioPromedioPago"] is { } promedioColumn)
+        {
+            promedioColumn.HeaderText = "Prom. Precio Pago";
+            promedioColumn.DefaultCellStyle.Format = "C0";
+            promedioColumn.Width = 110;
+        }
+
+        foreach (DataGridViewRow row in _gridBalanceProductos.Rows)
+        {
+            if (row.DataBoundItem is not BalanceProductoDto producto)
+            {
+                continue;
+            }
+
+            if (producto.CantidadVendida > 0)
+            {
+                row.DefaultCellStyle.BackColor = Color.FromArgb(240, 250, 240);
+            }
+        }
     }
 
     private void ConfigureBalanceFacturasGrid()
@@ -5745,6 +6131,7 @@ ORDER BY Codigo;";
             PlaceholderText = "Buscar producto por código o nombre...",
             Font = new Font("Segoe UI", 10)
         };
+        ConfigureFilterAutoComplete(_txtSearchInventario);
         _txtSearchInventario.TextChanged += (_, _) => LoadProductosInventario(_txtSearchInventario.Text);
 
         var btnClearSearch = new Button
@@ -5901,6 +6288,8 @@ ORDER BY Codigo;";
 
     private void LoadInventario()
     {
+        RefreshInventarioFilterAutoComplete();
+
         var resumen = _inventarioRepository.GetResumen();
         _lblInventarioTotalProductos.Text = resumen.TotalProductos.ToString("N0");
         _lblInventarioValorTotal.Text = resumen.ValorInventario.ToString("C0");
