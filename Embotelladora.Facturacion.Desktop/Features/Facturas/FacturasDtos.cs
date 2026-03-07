@@ -57,6 +57,41 @@ internal sealed class InvoiceSummaryDto
     public string Estado { get; set; } = string.Empty;
 }
 
+internal sealed class InvoiceListResumenDto
+{
+    public int TotalFacturas { get; set; }
+    public decimal TotalFacturado { get; set; }
+    public decimal SaldoPendiente { get; set; }
+    public int FacturasPagadas { get; set; }
+}
+
+internal sealed class InvoicePrintDetailDto
+{
+    public long Id { get; set; }
+    public string Numero { get; set; } = string.Empty;
+    public DateTime Fecha { get; set; }
+    public string Cliente { get; set; } = string.Empty;
+    public string Nit { get; set; } = string.Empty;
+    public string Direccion { get; set; } = string.Empty;
+    public string MetodoPago { get; set; } = string.Empty;
+    public string Estado { get; set; } = string.Empty;
+    public decimal Subtotal { get; set; }
+    public decimal Retencion { get; set; }
+    public decimal Total { get; set; }
+    public decimal Saldo { get; set; }
+    public string Notas { get; set; } = string.Empty;
+    public List<InvoicePrintItemDto> Items { get; set; } = [];
+}
+
+internal sealed class InvoicePrintItemDto
+{
+    public string Codigo { get; set; } = string.Empty;
+    public string Descripcion { get; set; } = string.Empty;
+    public decimal Cantidad { get; set; }
+    public decimal PrecioUnitario { get; set; }
+    public decimal TotalLinea { get; set; }
+}
+
 // Payment DTOs
 internal sealed class Payment
 {

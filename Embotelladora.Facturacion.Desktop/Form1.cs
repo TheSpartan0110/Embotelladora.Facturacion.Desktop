@@ -47,6 +47,12 @@ public partial class Form1 : Form
     private Label _lblPaymentsCount = null!;
     private DataGridView _gridRecentInvoices = null!;
     private DataGridView _gridLowStock = null!;
+    private BarChartPanel _chartFacturacion = null!;
+    private DonutChartPanel _chartEstadoFacturas = null!;
+    private HorizontalBarChartPanel _chartTopClientes = null!;
+    private DonutChartPanel _chartMetodosPago = null!;
+    private readonly Dictionary<string, Button> _dashboardPeriodButtons = [];
+    private string _dashboardChartPeriodo = "6 Meses";
 
     private DataGridView _gridCustomers = null!;
     private TextBox _txtSearchCustomer = null!;
@@ -62,7 +68,17 @@ public partial class Form1 : Form
     private NumericUpDown _numItemPrice = null!;
     private Label _lblInvoiceSubtotal = null!;
     private Label _lblInvoiceTotal = null!;
+    private Label _lblInvoiceItemsCount = null!;
+    private Label _lblInvoiceSummaryDate = null!;
     private Label _lblItemStock = null!;
+
+    // Invoice list module fields
+    private Label _lblInvoicesTotalFacturas = null!;
+    private Label _lblInvoicesTotalFacturado = null!;
+    private Label _lblInvoicesSaldoPendiente = null!;
+    private Label _lblInvoicesFacturasPagadas = null!;
+    private TextBox _txtSearchInvoices = null!;
+    private ComboBox _cmbEstadoFilter = null!;
 
     // Payment module fields
     private DataGridView _gridPayments = null!;
@@ -394,63 +410,117 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 3,
             Margin = Padding.Empty,
             Padding = new Padding(0, 72, 0, 0)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         view.Controls.Add(layout);
 
+        // Summary cards
+        var cardsPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 0, 8)
+        };
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+
+        _lblInvoicesTotalFacturas = CreateCard(cardsPanel, 0, "Total Facturas", out _);
+        _lblInvoicesTotalFacturado = CreateCard(cardsPanel, 1, "Total Facturado", out _);
+        _lblInvoicesSaldoPendiente = CreateCard(cardsPanel, 2, "Saldo Pendiente", out _);
+        _lblInvoicesFacturasPagadas = CreateCard(cardsPanel, 3, "Facturas Pagadas", out _);
+
+        layout.Controls.Add(cardsPanel, 0, 0);
+
+        // Search bar
         var searchCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.White,
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
-            Padding = new Padding(14)
+            Padding = new Padding(14),
+            Margin = new Padding(0, 0, 0, 8)
         };
 
         var searchRow = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 3,
             RowCount = 1,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
 
-        var txtSearch = new TextBox
+        _txtSearchInvoices = new TextBox
         {
             Dock = DockStyle.Fill,
-            PlaceholderText = "Buscar por número o cliente...",
+            PlaceholderText = "Buscar por número de factura o cliente...",
             Font = new Font("Segoe UI", 10)
         };
-        txtSearch.TextChanged += (_, _) => LoadInvoicesList();
+        _txtSearchInvoices.TextChanged += (_, _) => LoadInvoicesList();
 
-        var cmbEstado = new ComboBox
+        _cmbEstadoFilter = new ComboBox
         {
             Dock = DockStyle.Fill,
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Segoe UI", 10)
         };
-        cmbEstado.Items.AddRange(["Todos los estados", "Enviada", "Pagada", "Vencida"]);
-        cmbEstado.SelectedIndex = 0;
+        _cmbEstadoFilter.Items.AddRange(["Todos los estados", "Enviada", "Pagada", "Parcial", "Vencida", "Anulada"]);
+        _cmbEstadoFilter.SelectedIndex = 0;
+        _cmbEstadoFilter.SelectedIndexChanged += (_, _) => LoadInvoicesList();
 
-        searchRow.Controls.Add(txtSearch, 0, 0);
-        searchRow.Controls.Add(cmbEstado, 1, 0);
+        var btnClearSearch = new Button
+        {
+            Text = "✕",
+            Dock = DockStyle.Fill,
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.Gray,
+            Font = new Font("Segoe UI", 9),
+            Cursor = Cursors.Hand
+        };
+        btnClearSearch.FlatAppearance.BorderSize = 0;
+        btnClearSearch.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
+        btnClearSearch.Click += (_, _) => { _txtSearchInvoices.Clear(); _cmbEstadoFilter.SelectedIndex = 0; _txtSearchInvoices.Focus(); };
+
+        searchRow.Controls.Add(_txtSearchInvoices, 0, 0);
+        searchRow.Controls.Add(_cmbEstadoFilter, 1, 0);
+        searchRow.Controls.Add(btnClearSearch, 2, 0);
         searchCard.Controls.Add(searchRow);
 
+        layout.Controls.Add(searchCard, 0, 1);
+
+        // Grid card
         var tableCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.White,
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14,
-            Padding = new Padding(12)
+            Padding = new Padding(16),
+            Margin = new Padding(0, 0, 0, 12)
         };
+
+        var gridTitle = new Label
+        {
+            Text = "📋 Listado de Facturas",
+            Dock = DockStyle.Top,
+            Height = 32,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        tableCard.Controls.Add(gridTitle);
 
         _gridInvoices = new DataGridView
         {
@@ -466,10 +536,11 @@ public partial class Form1 : Form
             MultiSelect = false
         };
         ConfigureGridStyle(_gridInvoices);
+        _gridInvoices.CellMouseClick += OnInvoiceListCellMouseClick;
+        _gridInvoices.CellPainting += OnInvoiceListCellPainting;
         AddGridWithTopMargin(tableCard, _gridInvoices, 20);
 
-        layout.Controls.Add(searchCard, 0, 0);
-        layout.Controls.Add(tableCard, 0, 1);
+        layout.Controls.Add(tableCard, 0, 2);
         return view;
     }
 
@@ -481,10 +552,25 @@ public partial class Form1 : Form
             AutoScroll = true
         };
 
+        var mainLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 5,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 256));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 256));
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        view.Controls.Add(mainLayout);
+
+        // Row 0: Summary cards
         var cards = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Height = 140,
+            Dock = DockStyle.Fill,
             ColumnCount = 4,
             Padding = new Padding(0, 6, 0, 0)
         };
@@ -497,78 +583,175 @@ public partial class Form1 : Form
         _lblSaldoPendiente = CreateCard(cards, 1, "Saldo Pendiente", out _lblPendingCount);
         _lblTotalPagos = CreateCard(cards, 2, "Total Pagos", out _lblPaymentsCount);
         _lblClientesActivos = CreateCard(cards, 3, "Clientes Activos", out _);
-        view.Controls.Add(cards);
+        mainLayout.Controls.Add(cards, 0, 0);
 
-        var analytics = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 330,
-            ColumnCount = 2,
-            Padding = new Padding(4, 8, 4, 8)
-        };
-        analytics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));
-        analytics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-
-        var monthlyPanel = CreateDataPanel("Facturación Mensual", out var gridMonthly);
-        gridMonthly.Visible = false;
-        monthlyPanel.Controls.Add(CreateDashboardBars());
-
-        var statusPanel = CreateDataPanel("Estado de Facturas", out var gridStatus);
-        gridStatus.Visible = false;
-        statusPanel.Controls.Add(CreateStatusLegend());
-
-        analytics.Controls.Add(monthlyPanel, 0, 0);
-        analytics.Controls.Add(statusPanel, 1, 0);
-        view.Controls.Add(analytics);
-
-        var content = new SplitContainer
+        // Row 1: Period navigator
+        var periodCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            BackColor = Color.Transparent,
-            IsSplitterFixed = true
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(8, 4, 8, 4),
+            Margin = new Padding(4, 2, 4, 2)
         };
-        view.Controls.Add(content);
-
-        void AdjustDashboardSplit()
+        var periodFlow = new FlowLayoutPanel
         {
-            const int desiredPanel1Min = 220;
-            const int desiredPanel2Min = 220;
-            const int desiredSplitterDistance = 280;
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty
+        };
+        var periodLabel = new Label
+        {
+            Text = "📊 Período:",
+            Width = 82,
+            Height = 32,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = Color.FromArgb(45, 55, 45),
+            Margin = new Padding(4, 0, 6, 0)
+        };
+        periodFlow.Controls.Add(periodLabel);
+        AddDashboardPeriodButton(periodFlow, "7 Días");
+        AddDashboardPeriodButton(periodFlow, "6 Meses");
+        AddDashboardPeriodButton(periodFlow, "Anual");
+        periodCard.Controls.Add(periodFlow);
+        SetDashboardPeriodSelection("6 Meses");
+        mainLayout.Controls.Add(periodCard, 0, 1);
 
-            var available = content.Height - content.SplitterWidth;
-            if (available <= 0)
-            {
-                return;
-            }
+        // Row 2: Bar chart (Facturado vs Recaudado) + Donut (Estado Facturas)
+        var chartsRow1 = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(4, 2, 4, 2)
+        };
+        chartsRow1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        chartsRow1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-            if (available >= desiredPanel1Min + desiredPanel2Min)
-            {
-                content.Panel1MinSize = desiredPanel1Min;
-                content.Panel2MinSize = desiredPanel2Min;
-            }
-            else
-            {
-                var panel1Fallback = available / 2;
-                content.Panel1MinSize = panel1Fallback;
-                content.Panel2MinSize = available - panel1Fallback;
-            }
+        var barChartCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(10),
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        var barChartTitle = new Label
+        {
+            Text = "📊 Facturado vs Recaudado",
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        _chartFacturacion = new BarChartPanel { Dock = DockStyle.Fill };
+        barChartCard.Controls.Add(_chartFacturacion);
+        barChartCard.Controls.Add(barChartTitle);
 
-            var min = content.Panel1MinSize;
-            var max = Math.Max(min, available - content.Panel2MinSize);
-            content.SplitterDistance = Math.Clamp(desiredSplitterDistance, min, max);
-        }
+        var donutStatusCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(10),
+            Margin = new Padding(4, 0, 0, 0)
+        };
+        var donutStatusTitle = new Label
+        {
+            Text = "📈 Estado de Facturas",
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        _chartEstadoFacturas = new DonutChartPanel { Dock = DockStyle.Fill };
+        donutStatusCard.Controls.Add(_chartEstadoFacturas);
+        donutStatusCard.Controls.Add(donutStatusTitle);
 
-        content.SizeChanged += (_, _) => AdjustDashboardSplit();
-        view.SizeChanged += (_, _) => AdjustDashboardSplit();
+        chartsRow1.Controls.Add(barChartCard, 0, 0);
+        chartsRow1.Controls.Add(donutStatusCard, 1, 0);
+        mainLayout.Controls.Add(chartsRow1, 0, 2);
 
-        var recentPanel = CreateDataPanel("Facturas Recientes", out _gridRecentInvoices);
-        content.Panel1.Controls.Add(recentPanel);
+        // Row 3: Top Clientes (HBar) + Métodos de Pago (Donut)
+        var chartsRow2 = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(4, 2, 4, 2)
+        };
+        chartsRow2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        chartsRow2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-        var stockPanel = CreateDataPanel("Alertas de Stock Mínimo", out _gridLowStock);
-        content.Panel2.Controls.Add(stockPanel);
+        var topClientesCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(10),
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        var topClientesTitle = new Label
+        {
+            Text = "🏆 Top 5 Clientes",
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        _chartTopClientes = new HorizontalBarChartPanel { Dock = DockStyle.Fill };
+        topClientesCard.Controls.Add(_chartTopClientes);
+        topClientesCard.Controls.Add(topClientesTitle);
 
-        AdjustDashboardSplit();
+        var metodosPagoCard = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(222, 226, 219),
+            Radius = 14,
+            Padding = new Padding(10),
+            Margin = new Padding(4, 0, 0, 0)
+        };
+        var metodosPagoTitle = new Label
+        {
+            Text = "💳 Recaudo por Método de Pago",
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = Color.FromArgb(33, 33, 33)
+        };
+        _chartMetodosPago = new DonutChartPanel { Dock = DockStyle.Fill };
+        metodosPagoCard.Controls.Add(_chartMetodosPago);
+        metodosPagoCard.Controls.Add(metodosPagoTitle);
+
+        chartsRow2.Controls.Add(topClientesCard, 0, 0);
+        chartsRow2.Controls.Add(metodosPagoCard, 1, 0);
+        mainLayout.Controls.Add(chartsRow2, 0, 3);
+
+        // Row 4: Grids (Facturas Recientes + Stock Bajo)
+        var gridsRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(4, 2, 4, 2),
+            MinimumSize = new Size(0, 240)
+        };
+        gridsRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        gridsRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+        var recentPanel = CreateDataPanel("📄 Facturas Recientes", out _gridRecentInvoices);
+        var stockPanel = CreateDataPanel("⚠️ Alertas de Stock Mínimo", out _gridLowStock);
+        gridsRow.Controls.Add(recentPanel, 0, 0);
+        gridsRow.Controls.Add(stockPanel, 1, 0);
+        mainLayout.Controls.Add(gridsRow, 0, 4);
 
         return view;
     }
@@ -716,11 +899,10 @@ public partial class Form1 : Form
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-        mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));
+        mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
         view.Controls.Add(mainLayout);
 
-        // Columna izquierda: 3 filas
         var leftLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -729,11 +911,10 @@ public partial class Form1 : Form
             Margin = new Padding(12, 12, 6, 12),
             Padding = Padding.Empty
         };
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 200));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 188));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
 
-        // 1. INFORMACIÓN GENERAL
         var infoCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
@@ -743,6 +924,17 @@ public partial class Form1 : Form
             Padding = new Padding(16),
             Margin = new Padding(0, 0, 0, 12)
         };
+
+        var infoLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        infoLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        infoLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var infoTitle = new Label
         {
@@ -764,10 +956,9 @@ public partial class Form1 : Form
         infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        infoGrid.Height = 140;
+        infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
         infoGrid.Controls.Add(new Label { Text = "Cliente *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 0);
         _cmbInvoiceCustomer = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -779,16 +970,24 @@ public partial class Form1 : Form
 
         infoGrid.Controls.Add(new Label { Text = "Fecha *", Font = new Font("Segoe UI", 9, FontStyle.Bold), AutoSize = false, Height = 24 }, 0, 2);
         _dtpInvoiceDate = new DateTimePicker { Dock = DockStyle.Fill, Format = DateTimePickerFormat.Short };
+        _dtpInvoiceDate.ValueChanged += (_, _) => UpdateInvoiceSummaryDate();
         infoGrid.Controls.Add(_dtpInvoiceDate, 0, 3);
 
-        infoGrid.Controls.Add(new Label { Text = string.Empty, AutoSize = false, Height = 24 }, 1, 2);
-        infoGrid.Controls.Add(new Label { Text = string.Empty, AutoSize = false, Height = 24 }, 1, 3);
+        var helperLabel = new Label
+        {
+            Text = "La fecha se reflejará en el resumen y en la impresión.",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 8.5f),
+            ForeColor = Color.DimGray
+        };
+        infoGrid.Controls.Add(helperLabel, 1, 3);
 
-        infoCard.Controls.Add(infoGrid);
-        infoCard.Controls.Add(infoTitle);
+        infoLayout.Controls.Add(infoTitle, 0, 0);
+        infoLayout.Controls.Add(infoGrid, 0, 1);
+        infoCard.Controls.Add(infoLayout);
         leftLayout.Controls.Add(infoCard, 0, 0);
 
-        // 2. PRODUCTOS DE LA FACTURA
         var productsCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
@@ -799,6 +998,19 @@ public partial class Form1 : Form
             Margin = new Padding(0, 0, 0, 12)
         };
 
+        var productsLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        productsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        productsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        productsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        productsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
         var productsTitle = new Label
         {
             Text = "📦 Productos de la Factura",
@@ -807,15 +1019,14 @@ public partial class Form1 : Form
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
-        productsCard.Controls.Add(productsTitle);
+        productsLayout.Controls.Add(productsTitle, 0, 0);
 
         var productsTopBar = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Height = 40,
-            Margin = new Padding(0, 8, 0, 8),
+            Margin = new Padding(0, 8, 0, 4),
             Padding = Padding.Empty
         };
         productsTopBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -825,25 +1036,35 @@ public partial class Form1 : Form
         _cmbItemProduct.SelectedIndexChanged += (_, _) => OnProductChanged();
         productsTopBar.Controls.Add(_cmbItemProduct, 0, 0);
 
-        var btnAddItem = new Button { Text = "+ Agregar", Dock = DockStyle.Fill, BackColor = Color.FromArgb(45, 111, 26), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+        var btnAddItem = new Button
+        {
+            Text = "+ Agregar",
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(45, 111, 26),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        btnAddItem.FlatAppearance.BorderSize = 0;
         btnAddItem.Click += (_, _) => AddInvoiceItem();
         productsTopBar.Controls.Add(btnAddItem, 1, 0);
-        productsCard.Controls.Add(productsTopBar);
+        productsLayout.Controls.Add(productsTopBar, 0, 1);
 
-        // Formulario de edición del producto
         var productEditForm = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             ColumnCount = 4,
             RowCount = 2,
-            Height = 80,
-            Margin = new Padding(0, 8, 0, 8),
+            Margin = new Padding(0, 4, 0, 0),
             Padding = Padding.Empty
         };
         productEditForm.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         productEditForm.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
         productEditForm.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
         productEditForm.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        productEditForm.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        productEditForm.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
         productEditForm.Controls.Add(new Label { Text = "Descripción", Font = new Font("Segoe UI", 8, FontStyle.Bold), Dock = DockStyle.Top }, 0, 0);
         _txtItemDescription = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 8, 0) };
@@ -861,7 +1082,7 @@ public partial class Form1 : Form
         _lblItemStock = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.DimGray, Text = "Stock: -", Margin = new Padding(0, 4, 0, 0), Font = new Font("Segoe UI", 9) };
         productEditForm.Controls.Add(_lblItemStock, 3, 1);
 
-        productsCard.Controls.Add(productEditForm);
+        productsLayout.Controls.Add(productEditForm, 0, 2);
 
         _gridInvoiceItems = new DataGridView
         {
@@ -877,7 +1098,6 @@ public partial class Form1 : Form
             ReadOnly = false
         };
 
-        // Agregar columna de eliminación ANTES de vincular DataSource
         var deleteColumn = new DataGridViewButtonColumn
         {
             Name = "Eliminar",
@@ -889,8 +1109,6 @@ public partial class Form1 : Form
             SortMode = DataGridViewColumnSortMode.NotSortable
         };
         _gridInvoiceItems.Columns.Add(deleteColumn);
-
-        // Ahora vincular DataSource
         _gridInvoiceItems.DataSource = _invoiceItems;
 
         _gridInvoiceItems.CellEndEdit += (_, _) => RecalculateInvoiceTotals();
@@ -910,11 +1128,11 @@ public partial class Form1 : Form
             }
         };
 
-        AddGridWithTopMargin(productsCard, _gridInvoiceItems, 20);
+        productsLayout.Controls.Add(CreateGridHost(_gridInvoiceItems, 12), 0, 3);
+        productsCard.Controls.Add(productsLayout);
 
         leftLayout.Controls.Add(productsCard, 0, 1);
 
-        // 3. NOTAS
         var notesCard = new RoundedPanel
         {
             Dock = DockStyle.Fill,
@@ -925,6 +1143,17 @@ public partial class Form1 : Form
             Margin = Padding.Empty
         };
 
+        var notesLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        notesLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        notesLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
         var notesTitle = new Label
         {
             Text = "📝 Notas",
@@ -933,7 +1162,7 @@ public partial class Form1 : Form
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = Color.FromArgb(33, 33, 33)
         };
-        notesCard.Controls.Add(notesTitle);
+        notesLayout.Controls.Add(notesTitle, 0, 0);
 
         _txtInvoiceNotes = new TextBox
         {
@@ -941,14 +1170,15 @@ public partial class Form1 : Form
             Multiline = true,
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Segoe UI", 9),
-            Margin = new Padding(0, 8, 0, 0)
+            Margin = new Padding(0, 8, 0, 0),
+            ScrollBars = ScrollBars.Vertical
         };
-        notesCard.Controls.Add(_txtInvoiceNotes);
+        notesLayout.Controls.Add(_txtInvoiceNotes, 0, 1);
+        notesCard.Controls.Add(notesLayout);
 
         leftLayout.Controls.Add(notesCard, 0, 2);
         mainLayout.Controls.Add(leftLayout, 0, 0);
 
-        // Columna derecha: RESUMEN
         var rightPanel = new Panel
         {
             Dock = DockStyle.Fill,
@@ -966,6 +1196,18 @@ public partial class Form1 : Form
             Padding = new Padding(20)
         };
 
+        var summaryLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        summaryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        summaryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        summaryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
+
         var summaryTitle = new Label
         {
             Text = "Resumen",
@@ -975,79 +1217,99 @@ public partial class Form1 : Form
             ForeColor = Color.FromArgb(33, 33, 33),
             Margin = new Padding(0, 0, 0, 16)
         };
-        summaryCard.Controls.Add(summaryTitle);
+        summaryLayout.Controls.Add(summaryTitle, 0, 0);
 
-        // Panel con scroll para el contenido del resumen
         var summaryContentPanel = new Panel
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
-            Padding = new Padding(0, 20, 0, 0)
+            Padding = new Padding(0, 12, 0, 0)
         };
 
         var summaryGrid = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
-            RowCount = 3,
+            RowCount = 4,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
-            Height = 170
+            Height = 216
         };
         summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
         summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
-        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        summaryGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
 
         summaryGrid.Controls.Add(new Label { Text = "📅 Fecha de Factura", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        var lblSummaryDate = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(lblSummaryDate, 1, 0);
+        _lblInvoiceSummaryDate = new Label { Text = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy"), Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
+        summaryGrid.Controls.Add(_lblInvoiceSummaryDate, 1, 0);
 
-        summaryGrid.Controls.Add(new Label { Text = "Subtotal", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
+        summaryGrid.Controls.Add(new Label { Text = "Items cargados", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
+        _lblInvoiceItemsCount = new Label { Text = "0 productos", Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.DimGray };
+        summaryGrid.Controls.Add(_lblInvoiceItemsCount, 1, 1);
+
+        summaryGrid.Controls.Add(new Label { Text = "Subtotal", Font = new Font("Segoe UI", 9, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
         _lblInvoiceSubtotal = new Label { Text = "$ 0", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(33, 33, 33) };
-        summaryGrid.Controls.Add(_lblInvoiceSubtotal, 1, 1);
+        summaryGrid.Controls.Add(_lblInvoiceSubtotal, 1, 2);
 
         var totalLblRow = new Label { Text = "Total", Font = new Font("Segoe UI", 11, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
-        summaryGrid.Controls.Add(totalLblRow, 0, 2);
-        _lblInvoiceTotal = new Label { Text = "$ 0", Font = new Font("Segue UI", 16, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
-        summaryGrid.Controls.Add(_lblInvoiceTotal, 1, 2);
+        summaryGrid.Controls.Add(totalLblRow, 0, 3);
+        _lblInvoiceTotal = new Label { Text = "$ 0", Font = new Font("Segoe UI", 16, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(11, 52, 22), Padding = new Padding(0, 12, 0, 0) };
+        summaryGrid.Controls.Add(_lblInvoiceTotal, 1, 3);
 
         summaryContentPanel.Controls.Add(summaryGrid);
+        summaryLayout.Controls.Add(summaryContentPanel, 0, 1);
 
-        summaryCard.Controls.Add(summaryContentPanel);
-
-        var buttonPanel = new FlowLayoutPanel
+        var buttonPanel = new TableLayoutPanel
         {
-            Dock = DockStyle.Bottom,
-            Height = 120,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
             Margin = Padding.Empty,
             Padding = new Padding(0, 12, 0, 0)
         };
+        buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
 
         var btnSaveInvoice = new Button
         {
             Text = "✓ Crear y Enviar",
-            Width = 260,
-            Height = 48,
+            Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(33, 99, 42),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 12),
+            Margin = new Padding(0, 0, 0, 6),
             Cursor = Cursors.Hand
         };
         btnSaveInvoice.FlatAppearance.BorderSize = 0;
         btnSaveInvoice.Click += (_, _) => SaveInvoice();
-        buttonPanel.Controls.Add(btnSaveInvoice);
+        buttonPanel.Controls.Add(btnSaveInvoice, 0, 0);
+
+        var btnPrintInvoice = new Button
+        {
+            Text = "🖨 Imprimir",
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            ForeColor = Color.FromArgb(45, 55, 45),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 6),
+            Cursor = Cursors.Hand
+        };
+        btnPrintInvoice.FlatAppearance.BorderSize = 1;
+        btnPrintInvoice.FlatAppearance.BorderColor = Color.FromArgb(214, 218, 210);
+        btnPrintInvoice.FlatAppearance.MouseOverBackColor = Color.FromArgb(246, 248, 244);
+        btnPrintInvoice.Click += (_, _) => PrintCurrentInvoiceDraft();
+        buttonPanel.Controls.Add(btnPrintInvoice, 0, 1);
 
         var btnDraft = new Button
         {
-            Text = "💾 Guardar como Borrador",
-            Width = 260,
-            Height = 48,
+            Text = "🧹 Limpiar formulario",
+            Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(245, 247, 245),
             ForeColor = Color.FromArgb(33, 33, 33),
             FlatStyle = FlatStyle.Flat,
@@ -1058,13 +1320,24 @@ public partial class Form1 : Form
         btnDraft.FlatAppearance.BorderSize = 1;
         btnDraft.FlatAppearance.BorderColor = Color.FromArgb(222, 226, 219);
         btnDraft.Click += (_, _) => ClearInvoiceForm();
-        buttonPanel.Controls.Add(btnDraft);
+        buttonPanel.Controls.Add(btnDraft, 0, 2);
 
-        summaryCard.Controls.Add(buttonPanel);
+        summaryLayout.Controls.Add(buttonPanel, 0, 2);
+        summaryCard.Controls.Add(summaryLayout);
         rightPanel.Controls.Add(summaryCard);
         mainLayout.Controls.Add(rightPanel, 1, 0);
 
         return view;
+    }
+
+    private void UpdateInvoiceSummaryDate()
+    {
+        if (_lblInvoiceSummaryDate is null || _dtpInvoiceDate is null)
+        {
+            return;
+        }
+
+        _lblInvoiceSummaryDate.Text = _dtpInvoiceDate.Value.ToString("d 'de' MMMM 'de' yyyy");
     }
 
     private static Label CreateEditorLabel(string text)
@@ -2121,9 +2394,9 @@ public partial class Form1 : Form
         var card = new RoundedPanel
         {
             Dock = DockStyle.Fill,
-            Margin = new Padding(8),
+            Margin = new Padding(6),
             BackColor = Color.White,
-            Padding = new Padding(16),
+            Padding = new Padding(12, 50, 12, 4),
             BorderColor = Color.FromArgb(222, 226, 219),
             Radius = 14
         };
@@ -2132,26 +2405,26 @@ public partial class Form1 : Form
         {
             Text = title,
             Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            Height = 26
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Height = 20
         };
 
         var valueLabel = new Label
         {
             Text = "$ 0",
             Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 19, FontStyle.Bold),
+            Font = new Font("Segoe UI", 18, FontStyle.Bold),
             ForeColor = Color.FromArgb(11, 52, 22),
-            Height = 50
+            Height = 46
         };
 
         secondary = new Label
         {
             Text = string.Empty,
             Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 9, FontStyle.Regular),
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
             ForeColor = Color.DimGray,
-            Height = 20
+            Height = 18
         };
 
         var accent = new Panel
@@ -2256,6 +2529,154 @@ public partial class Form1 : Form
         _lblClientesActivos.Text = snapshot.ClientesActivos.ToString("N0");
         _lblPendingCount.Text = $"{snapshot.FacturasPendientes} facturas pendientes";
         _lblPaymentsCount.Text = $"{snapshot.PagosRegistrados} pagos registrados";
+
+        LoadDashboardBarChart();
+        LoadDashboardStatusChart();
+        LoadDashboardTopClientes();
+        LoadDashboardMetodosPago();
+    }
+
+    private void LoadDashboardBarChart()
+    {
+        var data = _dashboardChartPeriodo switch
+        {
+            "7 Días" => _balanceRepository.GetBalanceDetalle(BalancePeriodo.Diario),
+            "Anual" => _balanceRepository.GetBalanceDetalle(BalancePeriodo.Anual),
+            _ => _balanceRepository.GetBalanceMensual()
+        };
+
+        var labels = data.Select(d => ShortenPeriodLabel(d.MesNombre)).ToList();
+
+        _chartFacturacion.SetData(
+            labels,
+            new BarChartSeries
+            {
+                Name = "Facturado",
+                Color = Color.FromArgb(45, 111, 26),
+                Values = data.Select(d => d.TotalFacturado).ToList()
+            },
+            new BarChartSeries
+            {
+                Name = "Recaudado",
+                Color = Color.FromArgb(62, 146, 137),
+                Values = data.Select(d => d.TotalRecaudado).ToList()
+            });
+    }
+
+    private void LoadDashboardStatusChart()
+    {
+        var statuses = _dashboardService.GetInvoiceStatusDistribution();
+        var slices = statuses.Select(s => new DonutSlice
+        {
+            Label = s.Estado,
+            Value = s.Cantidad,
+            Color = s.Estado switch
+            {
+                "Pagada" => Color.FromArgb(45, 111, 26),
+                "Pendiente" => Color.FromArgb(108, 142, 191),
+                "Enviada" => Color.FromArgb(59, 130, 185),
+                "Parcial" => Color.FromArgb(231, 168, 57),
+                "Vencida" => Color.FromArgb(205, 70, 49),
+                "Anulada" => Color.FromArgb(160, 160, 160),
+                _ => Color.FromArgb(120, 120, 120)
+            }
+        }).ToList();
+
+        var total = statuses.Sum(s => s.Cantidad);
+        _chartEstadoFacturas.SetData(slices, total.ToString("N0"), "Facturas");
+    }
+
+    private void LoadDashboardTopClientes()
+    {
+        var topClientes = _balanceRepository.GetTopClientes(5, BalancePeriodo.Total);
+        var colors = new[]
+        {
+            Color.FromArgb(45, 111, 26),
+            Color.FromArgb(62, 146, 137),
+            Color.FromArgb(59, 130, 185),
+            Color.FromArgb(231, 168, 57),
+            Color.FromArgb(136, 84, 208)
+        };
+
+        _chartTopClientes.SetData(topClientes.Select((c, i) => new HBarItem
+        {
+            Label = c.Nombre,
+            Value = c.TotalFacturado,
+            Color = colors[i % colors.Length]
+        }).ToList());
+    }
+
+    private void LoadDashboardMetodosPago()
+    {
+        var methods = _dashboardService.GetPaymentMethodDistribution();
+        var colors = new[]
+        {
+            Color.FromArgb(45, 111, 26),
+            Color.FromArgb(62, 146, 137),
+            Color.FromArgb(231, 168, 57),
+            Color.FromArgb(59, 130, 185),
+            Color.FromArgb(205, 70, 49),
+            Color.FromArgb(136, 84, 208)
+        };
+
+        var slices = methods.Select((m, i) => new DonutSlice
+        {
+            Label = m.MetodoPago,
+            Value = m.Total,
+            Color = colors[i % colors.Length]
+        }).ToList();
+
+        var total = methods.Sum(m => m.Total);
+        _chartMetodosPago.SetData(slices, total > 0 ? total.ToString("C0") : "$ 0", "Recaudado");
+    }
+
+    private void AddDashboardPeriodButton(Control parent, string text)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Width = 90,
+            Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.White,
+            ForeColor = Color.FromArgb(45, 55, 45),
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Margin = new Padding(0, 0, 6, 0),
+            Cursor = Cursors.Hand
+        };
+
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = Color.FromArgb(214, 218, 210);
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(246, 248, 244);
+
+        button.Click += (_, _) =>
+        {
+            _dashboardChartPeriodo = text;
+            SetDashboardPeriodSelection(text);
+            LoadDashboardBarChart();
+        };
+
+        _dashboardPeriodButtons[text] = button;
+        parent.Controls.Add(button);
+    }
+
+    private void SetDashboardPeriodSelection(string selected)
+    {
+        foreach (var (key, button) in _dashboardPeriodButtons)
+        {
+            var active = key == selected;
+            button.BackColor = active ? Color.FromArgb(45, 111, 26) : Color.White;
+            button.ForeColor = active ? Color.White : Color.FromArgb(45, 55, 45);
+            button.FlatAppearance.BorderColor = active ? Color.FromArgb(45, 111, 26) : Color.FromArgb(214, 218, 210);
+        }
+    }
+
+    private static string ShortenPeriodLabel(string label)
+    {
+        var parts = label.Split(' ');
+        if (parts.Length == 2 && parts[0].Length > 3)
+            return parts[0][..3] + " " + (parts[1].Length == 4 ? parts[1][2..] : parts[1]);
+        return label;
     }
 
     private void LoadCustomers(string? search)
@@ -2490,18 +2911,688 @@ public partial class Form1 : Form
 
     private void LoadInvoicesList()
     {
-        _gridInvoices.DataSource = _invoiceRepository.GetRecentInvoices();
-        var idColumn = _gridInvoices.Columns["Id"];
-        if (idColumn != null)
+        var resumen = _invoiceRepository.GetListResumen();
+        _lblInvoicesTotalFacturas.Text = resumen.TotalFacturas.ToString("N0");
+        _lblInvoicesTotalFacturado.Text = resumen.TotalFacturado.ToString("C0");
+        _lblInvoicesSaldoPendiente.Text = resumen.SaldoPendiente.ToString("C0");
+        _lblInvoicesFacturasPagadas.Text = resumen.FacturasPagadas.ToString("N0");
+
+        var search = _txtSearchInvoices.Text;
+        var estado = _cmbEstadoFilter.SelectedItem?.ToString();
+        var data = _invoiceRepository.GetRecentInvoices(100, search, estado);
+        _gridInvoices.DataSource = data;
+
+        if (_gridInvoices.Columns.Count > 0)
         {
-            idColumn.Visible = false;
+            if (_gridInvoices.Columns["Id"] != null)
+                _gridInvoices.Columns["Id"]!.Visible = false;
+
+            if (_gridInvoices.Columns["Numero"] != null)
+            {
+                _gridInvoices.Columns["Numero"]!.HeaderText = "N° Factura";
+                _gridInvoices.Columns["Numero"]!.Width = 110;
+            }
+
+            if (_gridInvoices.Columns["Fecha"] != null)
+            {
+                _gridInvoices.Columns["Fecha"]!.HeaderText = "Fecha";
+                _gridInvoices.Columns["Fecha"]!.Width = 90;
+            }
+
+            if (_gridInvoices.Columns["Cliente"] != null)
+            {
+                _gridInvoices.Columns["Cliente"]!.HeaderText = "Cliente";
+                _gridInvoices.Columns["Cliente"]!.MinimumWidth = 160;
+            }
+
+            if (_gridInvoices.Columns["Total"] != null)
+            {
+                _gridInvoices.Columns["Total"]!.HeaderText = "Total";
+                _gridInvoices.Columns["Total"]!.DefaultCellStyle.Format = "C0";
+                _gridInvoices.Columns["Total"]!.Width = 110;
+            }
+
+            if (_gridInvoices.Columns["Saldo"] != null)
+                _gridInvoices.Columns["Saldo"]!.Visible = false;
+
+            if (_gridInvoices.Columns["Estado"] != null)
+            {
+                _gridInvoices.Columns["Estado"]!.HeaderText = "Estado";
+                _gridInvoices.Columns["Estado"]!.Width = 90;
+            }
+
+            if (_gridInvoices.Columns["EstadoSaldo"] != null)
+            {
+                _gridInvoices.Columns["EstadoSaldo"]!.HeaderText = "Estado Saldo";
+                _gridInvoices.Columns["EstadoSaldo"]!.Width = 140;
+            }
+
+            EnsureInvoiceActionColumns();
+
+            foreach (DataGridViewRow row in _gridInvoices.Rows)
+            {
+                if (_gridInvoices.Columns["Acciones"] != null)
+                {
+                    row.Cells["Acciones"].Value = string.Empty;
+                }
+
+                if (row.DataBoundItem is InvoiceSummaryDto factura)
+                {
+                    row.DefaultCellStyle.BackColor = factura.Estado switch
+                    {
+                        "Pagada" => Color.FromArgb(232, 245, 232),
+                        "Vencida" => Color.FromArgb(255, 235, 235),
+                        "Parcial" => Color.FromArgb(255, 250, 230),
+                        "Anulada" => Color.FromArgb(240, 240, 240),
+                        _ => Color.White
+                    };
+
+                    if (factura.Estado is "Vencida")
+                    {
+                        row.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+                    }
+                }
+            }
+        }
+    }
+
+    private void EnsureInvoiceActionColumns()
+    {
+        if (_gridInvoices.Columns.Contains("Acciones"))
+        {
+            return;
         }
 
-        _gridInvoices.Columns["Numero"]!.HeaderText = "N° Factura";
-        _gridInvoices.Columns["Fecha"]!.HeaderText = "Fecha";
-        _gridInvoices.Columns["Cliente"]!.HeaderText = "Cliente";
-        _gridInvoices.Columns["Total"]!.DefaultCellStyle.Format = "C0";
-        _gridInvoices.Columns["Saldo"]!.DefaultCellStyle.Format = "C0";
+        _gridInvoices.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "Acciones",
+            HeaderText = "Acciones",
+            Width = 180,
+            ReadOnly = true,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
+    }
+
+    private void OnInvoiceListCellMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.RowIndex < 0)
+        {
+            return;
+        }
+
+        if (_gridInvoices.Rows[e.RowIndex].DataBoundItem is not InvoiceSummaryDto factura)
+        {
+            return;
+        }
+
+        if (_gridInvoices.Columns[e.ColumnIndex].Name != "Acciones")
+        {
+            return;
+        }
+
+        var buttonBounds = GetInvoiceActionButtonBounds(new Size(_gridInvoices.Columns[e.ColumnIndex].Width, _gridInvoices.Rows[e.RowIndex].Height));
+        var clickPoint = new Point(e.X, e.Y);
+
+        var selectedAction = buttonBounds.FindIndex(rect => rect.Contains(clickPoint)) switch
+        {
+            0 => "Ver",
+            1 => "Imprimir",
+            2 => "Anular",
+            3 => "Eliminar",
+            _ => null
+        };
+
+        if (selectedAction is null)
+        {
+            return;
+        }
+
+        switch (selectedAction)
+        {
+            case "Ver":
+                ViewInvoiceDetail(factura.Id);
+                break;
+            case "Imprimir":
+                PrintInvoice(factura.Id);
+                break;
+            case "Anular":
+                VoidInvoice(factura.Id);
+                break;
+            case "Eliminar":
+                DeleteInvoice(factura.Id);
+                break;
+        }
+    }
+
+    private void OnInvoiceListCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || _gridInvoices.Columns[e.ColumnIndex].Name != "Acciones")
+        {
+            return;
+        }
+
+        var graphics = e.Graphics;
+        if (graphics is null)
+        {
+            return;
+        }
+
+        e.PaintBackground(e.CellBounds, true);
+
+        var buttonBounds = GetInvoiceActionButtonBounds(e.CellBounds.Size);
+        var icons = new[] { "👁", "🖨", "🚫", "🗑" };
+        var backColors = new[]
+        {
+            Color.FromArgb(232, 245, 255),
+            Color.FromArgb(240, 247, 240),
+            Color.FromArgb(255, 245, 225),
+            Color.FromArgb(255, 235, 235)
+        };
+        var foreColors = new[]
+        {
+            Color.FromArgb(42, 104, 176),
+            Color.FromArgb(33, 99, 42),
+            Color.FromArgb(176, 120, 12),
+            Color.FromArgb(180, 40, 40)
+        };
+
+        using var font = new Font("Segoe UI Emoji", 10, FontStyle.Regular);
+
+        for (var i = 0; i < buttonBounds.Count; i++)
+        {
+            var rect = buttonBounds[i];
+            rect.Offset(e.CellBounds.Left, e.CellBounds.Top);
+
+            using var path = new GraphicsPath();
+            const int radius = 8;
+            path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
+            path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 90);
+            path.AddArc(rect.Right - radius, rect.Bottom - radius, radius, radius, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - radius, radius, radius, 90, 90);
+            path.CloseFigure();
+
+            using var brush = new SolidBrush(backColors[i]);
+            using var pen = new Pen(Color.FromArgb(214, 218, 210));
+            using var textBrush = new SolidBrush(foreColors[i]);
+            using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+
+            graphics.FillPath(brush, path);
+            graphics.DrawPath(pen, path);
+            graphics.DrawString(icons[i], font, textBrush, rect, format);
+        }
+
+        e.Handled = true;
+    }
+
+    private static List<Rectangle> GetInvoiceActionButtonBounds(Size cellSize)
+    {
+        const int buttonWidth = 32;
+        const int buttonHeight = 24;
+        const int spacing = 8;
+        var totalWidth = (buttonWidth * 4) + (spacing * 3);
+        var startX = Math.Max(6, (cellSize.Width - totalWidth) / 2);
+        var startY = Math.Max(4, (cellSize.Height - buttonHeight) / 2);
+
+        return
+        [
+            new Rectangle(startX, startY, buttonWidth, buttonHeight),
+            new Rectangle(startX + buttonWidth + spacing, startY, buttonWidth, buttonHeight),
+            new Rectangle(startX + ((buttonWidth + spacing) * 2), startY, buttonWidth, buttonHeight),
+            new Rectangle(startX + ((buttonWidth + spacing) * 3), startY, buttonWidth, buttonHeight)
+        ];
+    }
+
+    private void ViewInvoiceDetail(long invoiceId)
+    {
+        var detail = _invoiceRepository.GetInvoiceDetailText(invoiceId);
+        using var dialog = new Form
+        {
+            Text = "Detalle de Factura",
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.Sizable,
+            MinimizeBox = false,
+            MaximizeBox = true,
+            ShowInTaskbar = false,
+            ClientSize = new Size(550, 600),
+            BackColor = Color.White
+        };
+
+        var txtDetail = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ReadOnly = true,
+            Font = new Font("Consolas", 9.5f),
+            ScrollBars = ScrollBars.Vertical,
+            Text = detail,
+            Margin = new Padding(16),
+            BackColor = Color.FromArgb(250, 252, 248),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+
+        var btnPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 60,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(16, 10, 16, 10)
+        };
+
+        var btnClose = new Button
+        {
+            Text = "Cerrar",
+            Width = 110,
+            Height = 40,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(45, 111, 26),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            DialogResult = DialogResult.OK
+        };
+        btnClose.FlatAppearance.BorderSize = 0;
+
+        btnPanel.Controls.Add(btnClose);
+        dialog.Controls.Add(txtDetail);
+        dialog.Controls.Add(btnPanel);
+        dialog.ShowDialog(this);
+    }
+
+    private void EditInvoice(long invoiceId)
+    {
+        MessageBox.Show(
+            $"Edición de factura #{invoiceId}\n\nEsta funcionalidad se implementará en una futura versión.",
+            "Editar Factura",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    private void PrintInvoice(long invoiceId)
+    {
+        var invoice = _invoiceRepository.GetInvoicePrintDetail(invoiceId);
+        if (invoice is null)
+        {
+            MessageBox.Show("No se encontró la factura para imprimir.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        ShowInvoicePrintPreview(invoice, $"Factura-{invoice.Numero}", false);
+    }
+
+    private void PrintCurrentInvoiceDraft()
+    {
+        if (_cmbInvoiceCustomer.SelectedItem is not InvoiceCustomerLookupDto customer)
+        {
+            MessageBox.Show("Selecciona un cliente antes de imprimir la vista previa.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (_invoiceItems.Count == 0)
+        {
+            MessageBox.Show("Agrega al menos un ítem antes de imprimir la factura.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var paymentMethod = _cmbInvoicePaymentMethod.SelectedItem as PaymentMethodLookupDto;
+        var totals = ComputeInvoiceTotals();
+
+        var invoice = new InvoicePrintDetailDto
+        {
+            Numero = "BORRADOR",
+            Fecha = _dtpInvoiceDate.Value.Date,
+            Cliente = customer.Nombre,
+            Nit = customer.Nit,
+            Direccion = string.Empty,
+            MetodoPago = paymentMethod?.Nombre ?? "-",
+            Estado = "Borrador",
+            Subtotal = totals.subtotal,
+            Retencion = 0,
+            Total = totals.total,
+            Saldo = totals.total,
+            Notas = _txtInvoiceNotes.Text,
+            Items = _invoiceItems.Select(item => new InvoicePrintItemDto
+            {
+                Codigo = item.Codigo,
+                Descripcion = item.Descripcion,
+                Cantidad = item.Cantidad,
+                PrecioUnitario = item.PrecioUnitario,
+                TotalLinea = item.TotalLinea
+            }).ToList()
+        };
+
+        ShowInvoicePrintPreview(invoice, $"Factura-Borrador-{DateTime.Now:yyyyMMddHHmmss}", true);
+    }
+
+    private void ShowInvoicePrintPreview(InvoicePrintDetailDto invoice, string documentName, bool isDraft)
+    {
+        var printDoc = new System.Drawing.Printing.PrintDocument
+        {
+            DocumentName = documentName
+        };
+
+        printDoc.PrintPage += (_, e) =>
+        {
+            DrawInvoicePrintPage(e.Graphics!, e.MarginBounds, invoice, isDraft);
+            e.HasMorePages = false;
+        };
+
+        using var preview = new PrintPreviewDialog
+        {
+            Document = printDoc,
+            WindowState = FormWindowState.Maximized
+        };
+        preview.ShowDialog(this);
+    }
+
+    private static void DrawInvoicePrintPage(Graphics g, Rectangle bounds, InvoicePrintDetailDto invoice, bool isDraft)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        using var fontTitle = new Font("Times New Roman", 18, FontStyle.Bold | FontStyle.Italic);
+        using var fontSubtitle = new Font("Times New Roman", 14, FontStyle.Bold);
+        using var fontSection = new Font("Times New Roman", 11, FontStyle.Bold);
+        using var fontText = new Font("Times New Roman", 10);
+        using var fontSmall = new Font("Times New Roman", 9);
+        using var fontMono = new Font("Consolas", 9);
+        using var pen = new Pen(Color.Black, 1.1f);
+        using var thinPen = new Pen(Color.Black, 0.8f);
+        using var centerFormat = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        using var rightFormat = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
+        using var leftFormat = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+
+        var pageLeft = bounds.Left;
+        var pageTop = bounds.Top;
+        var pageWidth = bounds.Width;
+        var rightBoxWidth = 190f;
+        var headerLeftWidth = pageWidth - rightBoxWidth - 16f;
+
+        var headerTitleArea = new RectangleF(pageLeft, pageTop, headerLeftWidth, 58f);
+        g.DrawString("ACEITESPRO FACTURACIÓN", fontTitle, Brushes.Black, headerTitleArea, centerFormat);
+        g.DrawString("Documento comercial", fontSubtitle, Brushes.Black,
+            new RectangleF(pageLeft, pageTop + 34f, headerLeftWidth, 24f), centerFormat);
+
+        var documentBox = new RectangleF(pageLeft + headerLeftWidth + 16f, pageTop, rightBoxWidth, 78f);
+        g.DrawRectangle(pen, documentBox.X, documentBox.Y, documentBox.Width, documentBox.Height);
+        g.DrawLine(pen, documentBox.Left, documentBox.Top + 26f, documentBox.Right, documentBox.Top + 26f);
+        g.DrawString(isDraft ? "FACTURA BORRADOR" : "FACTURA", fontSection,
+            Brushes.Black, new RectangleF(documentBox.Left, documentBox.Top, documentBox.Width, 26f), centerFormat);
+        g.DrawString("Nro:", fontText, Brushes.Black, new RectangleF(documentBox.Left + 10f, documentBox.Top + 30f, 36f, 16f), leftFormat);
+        g.DrawString(invoice.Numero, fontSection, Brushes.Black, new RectangleF(documentBox.Left + 44f, documentBox.Top + 28f, documentBox.Width - 54f, 18f), leftFormat);
+        g.DrawString("Fecha:", fontText, Brushes.Black, new RectangleF(documentBox.Left + 10f, documentBox.Top + 50f, 44f, 18f), leftFormat);
+        g.DrawString(invoice.Fecha.ToString("dd/MM/yyyy"), fontText, Brushes.Black, new RectangleF(documentBox.Left + 54f, documentBox.Top + 50f, documentBox.Width - 64f, 18f), leftFormat);
+
+        var infoBox = new RectangleF(pageLeft, pageTop + 92f, pageWidth, 130f);
+        g.DrawRectangle(pen, infoBox.X, infoBox.Y, infoBox.Width, infoBox.Height);
+
+        var lineY = infoBox.Top + 10f;
+        g.DrawString($"Recibimos de:  {invoice.Cliente}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 10f, lineY, infoBox.Width * 0.7f, 18f), leftFormat);
+        g.DrawString($"Nit:  {invoice.Nit}", fontText, Brushes.Black, new RectangleF(infoBox.Left + infoBox.Width * 0.72f, lineY, infoBox.Width * 0.25f, 18f), leftFormat);
+
+        lineY += 22f;
+        g.DrawString($"Dirección:  {(string.IsNullOrWhiteSpace(invoice.Direccion) ? "-" : invoice.Direccion)}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 10f, lineY, infoBox.Width * 0.7f, 18f), leftFormat);
+        g.DrawString($"Estado:  {invoice.Estado}", fontText, Brushes.Black, new RectangleF(infoBox.Left + infoBox.Width * 0.72f, lineY, infoBox.Width * 0.25f, 18f), leftFormat);
+
+        lineY += 22f;
+        g.DrawString($"La suma de:  {ConvertAmountToSpanishWords(invoice.Total)}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 10f, lineY, infoBox.Width - 20f, 18f), leftFormat);
+
+        lineY += 26f;
+        g.DrawString("Concepto:", fontSection, Brushes.Black, new RectangleF(infoBox.Left + 10f, lineY, 90f, 18f), leftFormat);
+        g.DrawString("Venta de productos", fontText, Brushes.Black, new RectangleF(infoBox.Left + 102f, lineY, 220f, 18f), leftFormat);
+        g.DrawString($"Documento:  {(isDraft ? "Vista previa" : "Factura")}", fontText, Brushes.Black, new RectangleF(infoBox.Left + infoBox.Width * 0.58f, lineY, infoBox.Width * 0.18f, 18f), leftFormat);
+        g.DrawString($"Pago:  {invoice.Total:N0}", fontText, Brushes.Black, new RectangleF(infoBox.Left + infoBox.Width * 0.78f, lineY, infoBox.Width * 0.18f, 18f), leftFormat);
+
+        lineY += 24f;
+        g.DrawString($"Subtotal  {invoice.Subtotal:N0}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 10f, lineY, 140f, 18f), leftFormat);
+        g.DrawString($"Retención  {invoice.Retencion:N0}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 170f, lineY, 150f, 18f), leftFormat);
+        g.DrawString($"Saldo  {invoice.Saldo:N0}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 350f, lineY, 120f, 18f), leftFormat);
+        g.DrawString($"Forma de pago  {invoice.MetodoPago}", fontText, Brushes.Black, new RectangleF(infoBox.Left + 500f, lineY, infoBox.Width - 510f, 18f), leftFormat);
+
+        var tableTop = infoBox.Bottom + 8f;
+        var rowHeight = 24f;
+        var tableHeight = 30f + (Math.Max(invoice.Items.Count, 5) * rowHeight);
+        var tableRect = new RectangleF(pageLeft, tableTop, pageWidth, tableHeight);
+        g.DrawRectangle(pen, tableRect.X, tableRect.Y, tableRect.Width, tableRect.Height);
+
+        var columns = new[] { 90f, 310f, 70f, 120f, 120f };
+        var columnTitles = new[] { "Código", "Descripción", "Cant.", "Vr. Unitario", "Pago" };
+        var headerBottom = tableRect.Top + 28f;
+        g.DrawLine(thinPen, tableRect.Left, headerBottom, tableRect.Right, headerBottom);
+
+        var x = tableRect.Left;
+        for (var i = 0; i < columns.Length; i++)
+        {
+            if (i > 0)
+            {
+                g.DrawLine(thinPen, x, tableRect.Top, x, tableRect.Bottom);
+            }
+
+            var width = i == columns.Length - 1 ? tableRect.Right - x : columns[i];
+            g.DrawString(columnTitles[i], fontSection, Brushes.Black, new RectangleF(x + 4f, tableRect.Top + 4f, width - 8f, 20f), i >= 2 ? rightFormat : leftFormat);
+            x += width;
+        }
+
+        for (var row = 0; row < Math.Max(invoice.Items.Count, 5); row++)
+        {
+            var y = headerBottom + (row * rowHeight);
+            g.DrawLine(thinPen, tableRect.Left, y + rowHeight, tableRect.Right, y + rowHeight);
+
+            if (row >= invoice.Items.Count)
+            {
+                continue;
+            }
+
+            var item = invoice.Items[row];
+            var colX = tableRect.Left;
+            g.DrawString(item.Codigo, fontMono, Brushes.Black, new RectangleF(colX + 4f, y + 3f, columns[0] - 8f, rowHeight - 6f), leftFormat);
+            colX += columns[0];
+            g.DrawString(item.Descripcion, fontText, Brushes.Black, new RectangleF(colX + 4f, y + 3f, columns[1] - 8f, rowHeight - 6f), leftFormat);
+            colX += columns[1];
+            g.DrawString(item.Cantidad.ToString("N0"), fontText, Brushes.Black, new RectangleF(colX + 4f, y + 3f, columns[2] - 8f, rowHeight - 6f), rightFormat);
+            colX += columns[2];
+            g.DrawString(item.PrecioUnitario.ToString("N0"), fontText, Brushes.Black, new RectangleF(colX + 4f, y + 3f, columns[3] - 8f, rowHeight - 6f), rightFormat);
+            colX += columns[3];
+            g.DrawString(item.TotalLinea.ToString("N0"), fontSection, Brushes.Black, new RectangleF(colX + 4f, y + 3f, tableRect.Right - colX - 8f, rowHeight - 6f), rightFormat);
+        }
+
+        var totalBarTop = tableRect.Bottom + 4f;
+        var totalBar = new RectangleF(pageLeft, totalBarTop, pageWidth, 26f);
+        g.DrawRectangle(thinPen, totalBar.X, totalBar.Y, totalBar.Width, totalBar.Height);
+        g.DrawString("Total Factura:", fontSection, Brushes.Black, new RectangleF(totalBar.Left + pageWidth - 220f, totalBar.Top, 110f, totalBar.Height), rightFormat);
+        g.DrawString(invoice.Total.ToString("N0"), fontSection, Brushes.Black, new RectangleF(totalBar.Left + pageWidth - 105f, totalBar.Top, 90f, totalBar.Height), rightFormat);
+
+        var bottomBoxTop = totalBar.Bottom + 4f;
+        var bottomBox = new RectangleF(pageLeft, bottomBoxTop, pageWidth, 86f);
+        g.DrawRectangle(pen, bottomBox.X, bottomBox.Y, bottomBox.Width, bottomBox.Height);
+        g.DrawLine(thinPen, bottomBox.Left, bottomBox.Top + 24f, bottomBox.Right, bottomBox.Top + 24f);
+        g.DrawLine(thinPen, bottomBox.Left + (bottomBox.Width * 0.55f), bottomBox.Top, bottomBox.Left + (bottomBox.Width * 0.55f), bottomBox.Bottom);
+        g.DrawString("Forma de pago", fontSection, Brushes.Black, new RectangleF(bottomBox.Left, bottomBox.Top, bottomBox.Width * 0.55f, 24f), centerFormat);
+        g.DrawString("Firma y Sello", fontSection, Brushes.Black, new RectangleF(bottomBox.Left + (bottomBox.Width * 0.55f), bottomBox.Top, bottomBox.Width * 0.45f, 24f), centerFormat);
+
+        g.DrawLine(thinPen, bottomBox.Left + 90f, bottomBox.Top + 24f, bottomBox.Left + 90f, bottomBox.Bottom);
+        g.DrawLine(thinPen, bottomBox.Left + 280f, bottomBox.Top + 24f, bottomBox.Left + 280f, bottomBox.Bottom);
+        g.DrawLine(thinPen, bottomBox.Left + 400f, bottomBox.Top + 24f, bottomBox.Left + 400f, bottomBox.Bottom);
+
+        g.DrawString("Referencia", fontText, Brushes.Black, new RectangleF(bottomBox.Left + 4f, bottomBox.Top + 26f, 82f, 18f), centerFormat);
+        g.DrawString("Banco / Medio", fontText, Brushes.Black, new RectangleF(bottomBox.Left + 94f, bottomBox.Top + 26f, 182f, 18f), centerFormat);
+        g.DrawString("Responsable", fontText, Brushes.Black, new RectangleF(bottomBox.Left + 284f, bottomBox.Top + 26f, 112f, 18f), centerFormat);
+        g.DrawString("Valor", fontText, Brushes.Black, new RectangleF(bottomBox.Left + 404f, bottomBox.Top + 26f, 140f, 18f), centerFormat);
+
+        g.DrawString(invoice.Numero, fontText, Brushes.Black, new RectangleF(bottomBox.Left + 4f, bottomBox.Top + 50f, 82f, 18f), centerFormat);
+        g.DrawString(invoice.MetodoPago, fontText, Brushes.Black, new RectangleF(bottomBox.Left + 94f, bottomBox.Top + 50f, 182f, 18f), centerFormat);
+        g.DrawString(invoice.Cliente, fontText, Brushes.Black, new RectangleF(bottomBox.Left + 284f, bottomBox.Top + 50f, 112f, 18f), centerFormat);
+        g.DrawString(invoice.Total.ToString("N0"), fontText, Brushes.Black, new RectangleF(bottomBox.Left + 404f, bottomBox.Top + 50f, 140f, 18f), rightFormat);
+
+        if (!string.IsNullOrWhiteSpace(invoice.Notas))
+        {
+            g.DrawString($"Notas: {invoice.Notas}", fontSmall, Brushes.Black,
+                new RectangleF(bottomBox.Left + bottomBox.Width * 0.57f, bottomBox.Top + 30f, bottomBox.Width * 0.4f, 34f));
+        }
+    }
+
+    private static string ConvertAmountToSpanishWords(decimal amount)
+    {
+        var integerPart = Math.Abs((long)Math.Round(amount, 0, MidpointRounding.AwayFromZero));
+        var words = ConvertNumberToSpanish(integerPart);
+        return $"{words} PESOS M/L";
+    }
+
+    private static string ConvertNumberToSpanish(long number)
+    {
+        if (number == 0) return "CERO";
+        if (number < 0) return $"MENOS {ConvertNumberToSpanish(Math.Abs(number))}";
+        if (number == 1) return "UN";
+        if (number < 16)
+        {
+            return number switch
+            {
+                2 => "DOS",
+                3 => "TRES",
+                4 => "CUATRO",
+                5 => "CINCO",
+                6 => "SEIS",
+                7 => "SIETE",
+                8 => "OCHO",
+                9 => "NUEVE",
+                10 => "DIEZ",
+                11 => "ONCE",
+                12 => "DOCE",
+                13 => "TRECE",
+                14 => "CATORCE",
+                15 => "QUINCE",
+                _ => "UN"
+            };
+        }
+
+        if (number < 20) return $"DIECI{ConvertNumberToSpanish(number - 10).ToLowerInvariant()}".ToUpperInvariant();
+        if (number == 20) return "VEINTE";
+        if (number < 30) return $"VEINTI{ConvertNumberToSpanish(number - 20).ToLowerInvariant()}".ToUpperInvariant();
+        if (number < 100)
+        {
+            var tens = number / 10;
+            var units = number % 10;
+            var tensText = tens switch
+            {
+                3 => "TREINTA",
+                4 => "CUARENTA",
+                5 => "CINCUENTA",
+                6 => "SESENTA",
+                7 => "SETENTA",
+                8 => "OCHENTA",
+                9 => "NOVENTA",
+                _ => string.Empty
+            };
+
+            return units == 0 ? tensText : $"{tensText} Y {ConvertNumberToSpanish(units)}";
+        }
+
+        if (number == 100) return "CIEN";
+        if (number < 200) return $"CIENTO {ConvertNumberToSpanish(number - 100)}";
+        if (number < 1000)
+        {
+            var hundreds = number / 100;
+            var remainder = number % 100;
+            var hundredsText = hundreds switch
+            {
+                2 => "DOSCIENTOS",
+                3 => "TRESCIENTOS",
+                4 => "CUATROCIENTOS",
+                5 => "QUINIENTOS",
+                6 => "SEISCIENTOS",
+                7 => "SETECIENTOS",
+                8 => "OCHOCIENTOS",
+                9 => "NOVECIENTOS",
+                _ => "CIENTO"
+            };
+
+            return remainder == 0 ? hundredsText : $"{hundredsText} {ConvertNumberToSpanish(remainder)}";
+        }
+
+        if (number == 1000) return "MIL";
+        if (number < 2000) return $"MIL {ConvertNumberToSpanish(number - 1000)}";
+        if (number < 1000000)
+        {
+            var thousands = number / 1000;
+            var remainder = number % 1000;
+            var thousandsText = $"{ConvertNumberToSpanish(thousands)} MIL";
+            return remainder == 0 ? thousandsText : $"{thousandsText} {ConvertNumberToSpanish(remainder)}";
+        }
+
+        if (number == 1000000) return "UN MILLÓN";
+        if (number < 2000000) return $"UN MILLÓN {ConvertNumberToSpanish(number - 1000000)}";
+        if (number < 1000000000000)
+        {
+            var millions = number / 1000000;
+            var remainder = number % 1000000;
+            var millionsText = $"{ConvertNumberToSpanish(millions)} MILLONES";
+            return remainder == 0 ? millionsText : $"{millionsText} {ConvertNumberToSpanish(remainder)}";
+        }
+
+        return number.ToString("N0");
+    }
+
+    private void VoidInvoice(long invoiceId)
+    {
+        var confirm = MessageBox.Show(
+            "¿Desea anular esta factura?\n\n" +
+            "Esta acción:\n" +
+            "• Marcará la factura como 'Anulada'\n" +
+            "• Devolverá el stock de productos al inventario\n" +
+            "• Pondrá el saldo en $ 0\n\n" +
+            "¿Continuar?",
+            "Anular Factura",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _invoiceRepository.VoidInvoice(invoiceId);
+            MessageBox.Show("Factura anulada correctamente.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LoadInvoicesList();
+            LoadDashboard();
+            LoadRecentInvoices();
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(ex.Message, "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void DeleteInvoice(long invoiceId)
+    {
+        var confirm = MessageBox.Show(
+            "⚠ ADVERTENCIA: ¿Desea ELIMINAR esta factura?\n\n" +
+            "Esta acción:\n" +
+            "• Eliminará la factura de forma PERMANENTE\n" +
+            "• Eliminará todos los ítems asociados\n" +
+            "• Eliminará todos los pagos registrados\n" +
+            "• Devolverá el stock al inventario\n" +
+            "• Esta acción es IRREVERSIBLE\n\n" +
+            "¿Está completamente seguro?",
+            "Eliminar Factura",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Stop);
+
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _invoiceRepository.DeleteInvoice(invoiceId);
+            MessageBox.Show("Factura eliminada correctamente.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LoadInvoicesList();
+            LoadDashboard();
+            LoadRecentInvoices();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error al eliminar factura:\\n{ex.Message}", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void OnProductChanged()
@@ -2598,6 +3689,9 @@ public partial class Form1 : Form
         var totals = ComputeInvoiceTotals();
         _lblInvoiceSubtotal.Text = $"$ {totals.subtotal:N0}";
         _lblInvoiceTotal.Text = $"$ {totals.total:N0}";
+        _lblInvoiceItemsCount.Text = _invoiceItems.Count == 1
+            ? "1 producto"
+            : $"{_invoiceItems.Count:N0} productos";
         _gridInvoiceItems.Refresh();
         ConfigureInvoiceItemsColumns();
     }
@@ -2726,6 +3820,8 @@ public partial class Form1 : Form
         }
 
         _numItemQuantity.Value = 1;
+        _txtItemDescription.Clear();
+        UpdateInvoiceSummaryDate();
         RecalculateInvoiceTotals();
     }
 
@@ -2775,42 +3871,6 @@ ORDER BY Codigo;";
         var table = new DataTable();
         table.Load(reader);
         return table;
-    }
-
-    private static Control CreateDashboardBars()
-    {
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 36, 16, 24) };
-        var barA = new Panel { Width = 58, Height = 120, BackColor = Color.FromArgb(231, 168, 57), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Location = new Point(panel.Width - 170, panel.Height - 150) };
-        var barB = new Panel { Width = 58, Height = 210, BackColor = Color.FromArgb(62, 146, 137), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, Location = new Point(panel.Width - 105, panel.Height - 240) };
-        var axis = new Label { Text = "Oct    Nov    Dic    Ene    Feb    Mar", Dock = DockStyle.Bottom, Height = 24, ForeColor = Color.Gray };
-        panel.Controls.Add(barA);
-        panel.Controls.Add(barB);
-        panel.Controls.Add(axis);
-        return panel;
-    }
-
-    private static Control CreateStatusLegend()
-    {
-        var panel = new Panel { Dock = DockStyle.Fill };
-        var circle = new Label
-        {
-            Text = "◉",
-            ForeColor = Color.FromArgb(39, 106, 22),
-            Font = new Font("Segoe UI", 70, FontStyle.Bold),
-            AutoSize = true,
-            Location = new Point(70, 60)
-        };
-        var legend = new Label
-        {
-            Text = "● Pagadas   ● Enviadas",
-            ForeColor = Color.FromArgb(95, 95, 95),
-            Dock = DockStyle.Bottom,
-            Height = 34,
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        panel.Controls.Add(circle);
-        panel.Controls.Add(legend);
-        return panel;
     }
 
     private Panel BuildPaymentsListView()
