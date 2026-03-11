@@ -165,6 +165,17 @@ internal sealed class PaymentMethodLookupDto
     public string Nombre { get; set; } = string.Empty;
 }
 
+internal sealed class PaymentMethodDto
+{
+    public long Id { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public bool Activo { get; set; }
+    public int UsoFacturas { get; set; }
+    public int UsoPagos { get; set; }
+    public bool PuedeEliminar => UsoFacturas == 0 && UsoPagos == 0;
+    public string UsoResumen => $"Facturas: {UsoFacturas:N0} · Pagos: {UsoPagos:N0}";
+}
+
 internal sealed class ProductLookupDto
 {
     public long Id { get; set; }

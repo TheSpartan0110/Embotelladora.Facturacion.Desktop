@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Usuario - AceitesPro Facturación</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }
+        .container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c6e32; border-bottom: 2px solid #2c6e32; padding-bottom: 10px; margin-top: 0; }
+        h2 { color: #388e3c; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        h3 { color: #444; margin-top: 25px; }
+        p { margin-bottom: 15px; }
+        ul { margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+        .note { background-color: #e8f5e9; border-left: 4px solid #2c6e32; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .warning { background-color: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        code { background-color: #f5f5f5; padding: 2px 5px; border-radius: 3px; font-family: Consolas, monospace; }
+        .footer { margin-top: 50px; text-align: center; color: #888; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 20px; }
+        .icon { font-size: 1.2em; margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Manual de Usuario</h1>
+        <p><strong>Sistema:</strong> AceitesPro Facturación<br><strong>Versión:</strong> 1.0</p>
+
+        <div class="note">
+            <p>Bienvenido a la guía de usuario de <strong>AceitesPro Facturación</strong>. Este documento le ayudará a comprender y utilizar eficazmente todas las funcionalidades del sistema.</p>
+        </div>
+
+        <h2>📖 Tabla de Contenidos</h2>
+        <ul>
+            <li><a href="#dashboard">1. Dashboard</a></li>
+            <li><a href="#clientes">2. Gestión de Clientes</a></li>
+            <li><a href="#facturas">3. Facturación</a></li>
+            <li><a href="#pagos">4. Pagos y Recaudos</a></li>
+            <li><a href="#cartera">5. Cartera</a></li>
+            <li><a href="#balance">6. Balance Financiero</a></li>
+            <li><a href="#inventario">7. Inventario</a></li>
+            <li><a href="#configuracion">8. Configuración</a></li>
+        </ul>
+
+        <h2 id="dashboard">1. Dashboard 📊</h2>
+        <p>El Dashboard es la pantalla principal que ofrece una visión general del estado del negocio. Se actualiza automáticamente y muestra:</p>
+        <ul>
+            <li><strong>Resumen Financiero:</strong> Tarjetas con el total facturado, saldo pendiente y total recaudado.</li>
+            <li><strong>Gráficos:</strong> Comparativas de facturación vs recaudo, distribución de estados de facturas y top de clientes.</li>
+            <li><strong>Alertas:</strong> Facturas próximas a vencer y productos con stock bajo.</li>
+        </ul>
+
+        <h2 id="clientes">2. Gestión de Clientes 👥</h2>
+        <p>Módulo para administrar la base de datos de clientes.</p>
+
+        <h3>Cómo añadir un nuevo cliente:</h3>
+        <ol>
+            <li>En el menú lateral, seleccione la opción <strong>Clientes</strong>.</li>
+            <li>Haga clic en el botón <strong>+ Nuevo Cliente</strong> ubicado en la parte superior derecha.</li>
+            <li>Complete el formulario con los datos del cliente:
+                <ul>
+                    <li><strong>Nombre:</strong> Nombre completo o razón social (Obligatorio).</li>
+                    <li><strong>NIT / Cédula:</strong> Documento de identidad (Obligatorio, sin duplicados).</li>
+                    <li><strong>Teléfono, Dirección, Email:</strong> Datos de contacto.</li>
+                </ul>
+            </li>
+            <li>Haga clic en <strong>Guardar</strong> para registrar al cliente.</li>
+        </ol>
+
+        <h3>Buscar y Editar</h3>
+        <p>Utilice la barra de búsqueda para encontrar clientes por nombre o documento. Haga doble clic en un cliente o use el botón de <strong>Editar</strong> para modificar su información.</p>
+
+        <h2 id="facturas">3. Facturación 📄</h2>
+        <p>Permite crear, enviar y gestionar facturas de venta.</p>
+
+        <h3>Cómo hacer una factura:</h3>
+        <ol>
+            <li>Vaya al menú <strong>Facturas</strong> y haga clic en <strong>+ Nueva Factura</strong> (o use el botón de acceso rápido en el encabezado).</li>
+            <li>En el formulario de nueva factura:
+                <ul>
+                    <li><strong>Cliente:</strong> Busque y seleccione el cliente.</li>
+                    <li><strong>Método de Pago:</strong> Elija la forma de pago (Efectivo, Transferencia, Crédito, etc.).</li>
+                    <li><strong>Fecha:</strong> Por defecto es la fecha actual.</li>
+                </ul>
+            </li>
+            <li><strong>Agregar Productos:</strong>
+                <ul>
+                    <li>Busque el producto por nombre o código en la lista desplegable.</li>
+                    <li>Ingrese la <strong>Cantidad</strong>.</li>
+                    <li>Verifique el <strong>Precio</strong> (puede ajustarlo si es necesario).</li>
+                    <li>Haga clic en <strong>+ Agregar</strong>. Repita para todos los productos deseados.</li>
+                </ul>
+            </li>
+            <li>Verifique los totales (Subtotal y Total) en el resumen derecho.</li>
+            <li>Haga clic en <strong>✓ Crear y Enviar</strong> para finalizar y guardar la factura.</li>
+        </ol>
+
+        <h3>Cómo imprimir una factura:</h3>
+        <ul>
+            <li><strong>Desde el listado:</strong> En el módulo <strong>Facturas</strong>, busque la factura deseada en la tabla y haga clic en el icono de impresora (🖨) en la columna "Acciones".</li>
+            <li><strong>Desde el borrador:</strong> Mientras crea una factura nueva, puede hacer clic en <strong>🖨 Imprimir</strong> para ver una vista previa o imprimir un borrador antes de guardarla.</li>
+        </ul>
+
+        <div class="warning">
+            <p><strong>Nota:</strong> Una vez creada la factura, el stock de los productos seleccionados se descuenta automáticamente del inventario.</p>
+        </div>
+
+        <h2 id="pagos">4. Pagos y Recaudos 💰</h2>
+        <p>Registro de abonos y pagos completos a facturas.</p>
+
+        <h3>Cómo hacer un pago:</h3>
+        <ol>
+            <li>Ingrese al módulo <strong>Pagos</strong> desde el menú lateral.</li>
+            <li>Haga clic en <strong>+ Nuevo Pago</strong>.</li>
+            <li>Complete la información del pago:
+                <ul>
+                    <li><strong>Factura:</strong> Seleccione la factura pendiente de pago de la lista desplegable.</li>
+                    <li><strong>Monto:</strong> El sistema sugerirá el saldo pendiente. Puede modificarlo para hacer un abono parcial.</li>
+                    <li><strong>Método de Pago:</strong> Seleccione cómo se recibe el dinero.</li>
+                </ul>
+            </li>
+            <li>Verifique el resumen y haga clic en <strong>✓ Registrar Pago</strong>.</li>
+        </ol>
+
+        <h3>Anulación de Pagos:</h3>
+        <p>Si cometió un error, busque el pago en la lista histórica ("Historial de Pagos") y haga clic en el botón <strong>Anular</strong> (papelera/icono rojo). El saldo se devolverá a la factura correspondiente.</p>
+
+        <h2 id="cartera">5. Cartera 📉</h2>
+        <p>Herramienta para el seguimiento de cuentas por cobrar.</p>
+        <ul>
+            <li>Visualice todas las facturas pendientes agrupadas por cliente.</li>
+            <li>Consulte la <strong>Edad de Saldos</strong> para identificar deudas vencidas (30, 60, 90 días).</li>
+            <li>Identifique clientes con saldo a favor para aplicar en futuras compras.</li>
+        </ul>
+
+        <h2 id="balance">6. Balance Financiero 📈</h2>
+        <p>Reportes detallados del rendimiento del negocio.</p>
+        <p>Puede filtrar por períodos (Diario, Mensual, Anual) para ver:</p>
+        <ul>
+            <li>Total facturado vs Total costos.</li>
+            <li>Utilidad bruta estimada.</li>
+            <li>Flujo de caja por método de pago (Efectivo, Transferencia, Crédito).</li>
+        </ul>
+
+        <h2 id="inventario">7. Inventario 📦</h2>
+        <p>Control total de productos y existencias.</p>
+        <ul>
+            <li><strong>Productos:</strong> Cree y edite productos definiendo precios y stock mínimo.</li>
+            <li><strong>Kardex:</strong> Vea el historial completo de movimientos (Entradas y Salidas) de cada producto.</li>
+            <li><strong>Ajustes:</strong> Realice ajustes manuales de inventario (por pérdidas, obsequios, etc.) usando la opción "Movimiento".</li>
+        </ul>
+
+        <h2 id="configuracion">8. Configuración ⚙</h2>
+
+        <h3>Gestor de Base de Datos</h3>
+        <p>Para realizar tareas avanzadas, vaya a <strong>Configuración > Gestor de Base de Datos</strong> e ingrese el PIN de seguridad (Por defecto: <code>0000</code>).</p>
+
+        <h4>1. Exportar la base de datos (Backup):</h4>
+        <p>Utilice esta opción para guardar una copia de seguridad de toda su información.</p>
+        <ol>
+            <li>En el Gestor, haga clic en la tarjeta <strong>Exportar Base de Datos</strong>.</li>
+            <li>Se abrirá una ventana para guardar el archivo. Elija una ubicación segura (ej. Documentos, USB).</li>
+            <li>Haga clic en <strong>Guardar</strong>. Se generará un archivo <code>.db</code>.</li>
+        </ol>
+
+        <h4>2. Importar la base de datos (Restaurar):</h4>
+        <p>Permite recuperar información desde una copia de seguridad previamente exportada.</p>
+        <div class="warning"><strong>¡Advertencia!</strong> Esta acción reemplazará todos los datos actuales.</div>
+        <ol>
+            <li>Haga clic en <strong>Importar Base de Datos</strong>.</li>
+            <li>Busque y seleccione el archivo <code>.db</code> de respaldo.</li>
+            <li>Confirme la acción.</li>
+            <li>La aplicación se reiniciará automáticamente para aplicar los cambios.</li>
+        </ol>
+
+        <h4>3. Inicializar el programa (Limpiar Tablas):</h4>
+        <p>Si desea reiniciar las operaciones (borrar facturas y movimientos de prueba) pero mantener sus clientes y productos, siga estos pasos:</p>
+        <ol>
+            <li>En el Gestor, seleccione la opción <strong>Limpiar Tablas Específicas</strong>.</li>
+            <li>Marque las casillas de las tablas operativas:
+                <ul>
+                    <li><code>Factura</code> (Elimina todas las facturas).</li>
+                    <li><code>ItemFactura</code> (Elimina los detalles de facturas).</li>
+                    <li><code>Pago</code> (Elimina el historial de pagos).</li>
+                    <li><code>MovimientoInventarioExt</code> (Reinicia el historial de movimientos de stock).</li>
+                </ul>
+            </li>
+            <li><strong>No marque</strong> <code>Cliente</code> ni <code>ProductoExt</code> si desea conservar su catálogo.</li>
+            <li>Haga clic en <strong>Limpiar Seleccionadas</strong> y confirme las advertencias de seguridad.</li>
+        </ol>
+
+        <div class="footer">
+            <p>&copy; 2024 AceitesPro. Todos los derechos reservados.</p>
+        </div>
+    </div>
+</body>
+</html>

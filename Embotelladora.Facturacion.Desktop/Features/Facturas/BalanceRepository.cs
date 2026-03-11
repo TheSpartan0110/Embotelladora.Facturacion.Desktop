@@ -16,15 +16,23 @@ internal sealed class BalanceRepository
         connection.Open();
 
         var whereFacturas = BuildDateWhereClause("f.Fecha", rango);
+        // Para subconsultas que usan alias diferente (p.ej. f2) generamos una variante
+        var whereFacturasAliasF2 = BuildDateWhereClause("f2.Fecha", rango);
         var wherePagos = BuildDateWhereClause("p.Fecha", rango);
 
         using var command = connection.CreateCommand();
+        // Nota: devolvemos TotalRecaudado como el recaudo ocurrido dentro del periodo (para mostrar),
+        // pero para el cálculo de BalanceNeto tenemos en cuenta TODOS los pagos asociados a las facturas
+        // emitidas en el periodo, aunque su fecha sea fuera del rango seleccionado. Esto cumple la regla
+        // de que si una factura fue pagada en otra fecha, su efecto se refleje en el Balance Neto.
         command.CommandText = $@"
 SELECT
     (SELECT IFNULL(SUM(f.Total), 0) FROM Factura f WHERE {whereFacturas}) as TotalFacturado,
     (SELECT IFNULL(SUM(p.Valor), 0) FROM Pago p WHERE {wherePagos}) as TotalRecaudado,
     (SELECT IFNULL(SUM(f.Saldo), 0) FROM Factura f WHERE {whereFacturas}) as CuentasPorCobrar,
-    (SELECT COUNT(*) FROM Factura f WHERE {whereFacturas}) as FacturasEmitidas;";
+    (SELECT COUNT(*) FROM Factura f WHERE {whereFacturas}) as FacturasEmitidas,
+    -- Pagos asociados a las facturas del periodo, sin filtrar por fecha de pago
+    (SELECT IFNULL(SUM(p2.Valor), 0) FROM Pago p2 WHERE p2.FacturaId IN (SELECT f2.Id FROM Factura f2 WHERE {whereFacturasAliasF2})) as TotalRecaudadoPorFacturas;";
 
         AddDateParameters(command, rango);
 
@@ -32,15 +40,20 @@ SELECT
         if (reader.Read())
         {
             var totalFacturado = ToDecimal(reader, 0);
-            var totalRecaudado = ToDecimal(reader, 1);
+            var totalRecaudadoEnPeriodo = ToDecimal(reader, 1);
             var cuentasPorCobrar = ToDecimal(reader, 2);
             var facturasEmitidas = Convert.ToInt32(reader.GetValue(3));
-            var balanceNeto = totalRecaudado - (totalFacturado - cuentasPorCobrar);
+            var totalRecaudadoPorFacturas = ToDecimal(reader, 4);
+
+            // Mostrar TotalRecaudado como el recaudo ocurrido dentro del periodo seleccionado,
+            // pero calcular BalanceNeto considerando los pagos que aplican a las facturas
+            // emitidas en el periodo, aunque esos pagos hayan ocurrido fuera del periodo.
+            var balanceNeto = totalRecaudadoPorFacturas - (totalFacturado - cuentasPorCobrar);
 
             return new BalanceResumenDto
             {
                 TotalFacturado = totalFacturado,
-                TotalRecaudado = totalRecaudado,
+                TotalRecaudado = totalRecaudadoEnPeriodo,
                 CuentasPorCobrar = cuentasPorCobrar,
                 BalanceNeto = balanceNeto,
                 FacturasEmitidas = facturasEmitidas

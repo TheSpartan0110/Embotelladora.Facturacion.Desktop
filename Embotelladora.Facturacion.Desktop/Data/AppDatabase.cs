@@ -12,6 +12,8 @@ internal static class AppDatabase
     private static readonly string LegacyDataDirectory = Path.Combine(AppContext.BaseDirectory, "data");
     private static readonly string LegacyDatabasePath = Path.Combine(LegacyDataDirectory, "aceitespro.db");
     public static readonly string DatabasePath = Path.Combine(DataDirectory, "aceitespro.db");
+    private static readonly string ImportPendingPath = Path.Combine(DataDirectory, "import_pending.db");
+    public static string ImportPendingFilePath => ImportPendingPath;
 
     public static string ConnectionString => $"Data Source={DatabasePath}";
 
@@ -25,11 +27,32 @@ internal static class AppDatabase
     {
         Directory.CreateDirectory(DataDirectory);
 
-        if (File.Exists(DatabasePath) || !File.Exists(LegacyDatabasePath))
+        // If an import was scheduled by the running application (to avoid replacing a locked DB file),
+        // apply it now before any connections are created.
+        try
+        {
+            if (File.Exists(ImportPendingPath))
+            {
+                // Overwrite existing database with the imported one
+                File.Copy(ImportPendingPath, DatabasePath, overwrite: true);
+                File.Delete(ImportPendingPath);
+            }
+        }
+        catch
+        {
+            // Ignore errors here; fallback logic below will attempt to ensure DB exists.
+        }
+
+        // If database already exists in user data folder, nothing more to do.
+        if (File.Exists(DatabasePath))
         {
             return;
         }
 
-        File.Copy(LegacyDatabasePath, DatabasePath, overwrite: false);
+        // If there's a legacy DB bundled with the app, copy it to the user data folder on first run.
+        if (File.Exists(LegacyDatabasePath))
+        {
+            File.Copy(LegacyDatabasePath, DatabasePath, overwrite: false);
+        }
     }
 }

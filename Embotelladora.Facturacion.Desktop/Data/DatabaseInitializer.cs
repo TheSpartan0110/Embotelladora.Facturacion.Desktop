@@ -99,6 +99,12 @@ CREATE TABLE IF NOT EXISTS MovimientoInventarioExt (
     FOREIGN KEY(ReferenciaFacturaId) REFERENCES Factura(Id)
 );");
 
+        ExecuteNonQuery(connection, transaction, @"
+CREATE TABLE IF NOT EXISTS AppSettings (
+    Key TEXT PRIMARY KEY,
+    Value TEXT NOT NULL
+);");
+
         SeedDefaults(connection, transaction);
         transaction.Commit();
     }
@@ -114,10 +120,12 @@ CREATE TABLE IF NOT EXISTS MovimientoInventarioExt (
 
     private static void SeedDemoData(SqliteConnection connection, SqliteTransaction transaction)
     {
+        // Check if demo data has already been inserted
         using var checkCmd = connection.CreateCommand();
         checkCmd.Transaction = transaction;
-        checkCmd.CommandText = "SELECT COUNT(*) FROM Cliente;";
-        if (Convert.ToInt32(checkCmd.ExecuteScalar()) > 0)
+        checkCmd.CommandText = "SELECT Value FROM AppSettings WHERE Key = 'DemoInserted';";
+        var result = checkCmd.ExecuteScalar();
+        if (result != null && result.ToString() == "1")
             return;
 
         // --- Productos (10) ---
@@ -142,16 +150,22 @@ CREATE TABLE IF NOT EXISTS MovimientoInventarioExt (
             using var cmd = connection.CreateCommand();
             cmd.Transaction = transaction;
             cmd.CommandText = @"
-INSERT INTO ProductoExt(Codigo, Nombre, Unidad, PrecioBase, StockActual, StockMinimo, Activo)
-VALUES (@codigo, @nombre, @unidad, @precio, @stock, @stockMin, 1);
-SELECT last_insert_rowid();";
+INSERT OR IGNORE INTO ProductoExt(Codigo, Nombre, Unidad, PrecioBase, StockActual, StockMinimo, Activo)
+VALUES (@codigo, @nombre, @unidad, @precio, @stock, @stockMin, 1);";
             cmd.Parameters.AddWithValue("@codigo", p.Codigo);
             cmd.Parameters.AddWithValue("@nombre", p.Nombre);
             cmd.Parameters.AddWithValue("@unidad", p.Unidad);
             cmd.Parameters.AddWithValue("@precio", p.Precio);
             cmd.Parameters.AddWithValue("@stock", p.StockInicial);
             cmd.Parameters.AddWithValue("@stockMin", p.StockMinimo);
-            productoIds[i] = Convert.ToInt64(cmd.ExecuteScalar());
+            cmd.ExecuteNonQuery();
+
+            // Get the id
+            using var idCmd = connection.CreateCommand();
+            idCmd.Transaction = transaction;
+            idCmd.CommandText = "SELECT Id FROM ProductoExt WHERE Codigo = @codigo;";
+            idCmd.Parameters.AddWithValue("@codigo", p.Codigo);
+            productoIds[i] = Convert.ToInt64(idCmd.ExecuteScalar());
 
             // Movimiento de inventario: entrada inicial
             using var movCmd = connection.CreateCommand();
@@ -187,16 +201,22 @@ VALUES (@pid, @fecha, 'ENTRADA', @cant, NULL, 'Stock inicial de demostración');
             using var cmd = connection.CreateCommand();
             cmd.Transaction = transaction;
             cmd.CommandText = @"
-INSERT INTO Cliente(Codigo, Nombre, Nit, Direccion, Telefono, Email, Activo)
-VALUES (@codigo, @nombre, @nit, @direccion, @telefono, @email, 1);
-SELECT last_insert_rowid();";
+INSERT OR IGNORE INTO Cliente(Codigo, Nombre, Nit, Direccion, Telefono, Email, Activo)
+VALUES (@codigo, @nombre, @nit, @direccion, @telefono, @email, 1);";
             cmd.Parameters.AddWithValue("@codigo", c.Codigo);
             cmd.Parameters.AddWithValue("@nombre", c.Nombre);
             cmd.Parameters.AddWithValue("@nit", c.Nit);
             cmd.Parameters.AddWithValue("@direccion", c.Direccion);
             cmd.Parameters.AddWithValue("@telefono", c.Telefono);
             cmd.Parameters.AddWithValue("@email", c.Email);
-            clienteIds[i] = Convert.ToInt64(cmd.ExecuteScalar());
+            cmd.ExecuteNonQuery();
+
+            // Get the id
+            using var idCmd = connection.CreateCommand();
+            idCmd.Transaction = transaction;
+            idCmd.CommandText = "SELECT Id FROM Cliente WHERE Codigo = @codigo;";
+            idCmd.Parameters.AddWithValue("@codigo", c.Codigo);
+            clienteIds[i] = Convert.ToInt64(idCmd.ExecuteScalar());
         }
 
         // --- Facturas: 5 por cliente (50 total) con items, pagos y movimientos ---
@@ -263,9 +283,8 @@ SELECT last_insert_rowid();";
                     using var cmd = connection.CreateCommand();
                     cmd.Transaction = transaction;
                     cmd.CommandText = @"
-INSERT INTO Factura(Numero, Fecha, ClienteId, MetodoPagoId, Estado, Subtotal, Retencion, Total, Saldo, Notas)
-VALUES (@numero, @fecha, @clienteId, @metodoPagoId, @estado, @subtotal, @retencion, @total, @saldo, @notas);
-SELECT last_insert_rowid();";
+INSERT OR IGNORE INTO Factura(Numero, Fecha, ClienteId, MetodoPagoId, Estado, Subtotal, Retencion, Total, Saldo, Notas)
+VALUES (@numero, @fecha, @clienteId, @metodoPagoId, @estado, @subtotal, @retencion, @total, @saldo, @notas);";
                     cmd.Parameters.AddWithValue("@numero", $"FAC-{facturaNum:000000}");
                     cmd.Parameters.AddWithValue("@fecha", fechaStr);
                     cmd.Parameters.AddWithValue("@clienteId", clienteIds[ci]);
@@ -276,7 +295,14 @@ SELECT last_insert_rowid();";
                     cmd.Parameters.AddWithValue("@total", total);
                     cmd.Parameters.AddWithValue("@saldo", saldo);
                     cmd.Parameters.AddWithValue("@notas", "");
-                    facturaId = Convert.ToInt64(cmd.ExecuteScalar());
+                    cmd.ExecuteNonQuery();
+
+                    // Get the id
+                    using var idCmd = connection.CreateCommand();
+                    idCmd.Transaction = transaction;
+                    idCmd.CommandText = "SELECT Id FROM Factura WHERE Numero = @numero;";
+                    idCmd.Parameters.AddWithValue("@numero", $"FAC-{facturaNum:000000}");
+                    facturaId = Convert.ToInt64(idCmd.ExecuteScalar());
                 }
 
                 // Insertar items y movimientos de inventario
@@ -373,6 +399,12 @@ VALUES (@fid, @fecha, @valor, @mpId, @ref, @notas);";
                 }
             }
         }
+
+        // Mark demo data as inserted
+        using var flagCmd = connection.CreateCommand();
+        flagCmd.Transaction = transaction;
+        flagCmd.CommandText = "INSERT OR REPLACE INTO AppSettings(Key, Value) VALUES ('DemoInserted', '1');";
+        flagCmd.ExecuteNonQuery();
     }
 
     private static void ExecuteNonQuery(SqliteConnection connection, SqliteTransaction transaction, string sql)
