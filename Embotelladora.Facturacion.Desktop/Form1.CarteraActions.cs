@@ -94,7 +94,7 @@ public partial class Form1
         }
 
         _pendingPaymentInvoiceId = factura.Id;
-        ShowModule("NuevoPago");
+        this.ShowModule("NuevoPago");
     }
 
     private void PrintCartera()
