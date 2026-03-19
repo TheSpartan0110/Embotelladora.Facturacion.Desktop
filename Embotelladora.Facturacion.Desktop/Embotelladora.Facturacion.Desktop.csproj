@@ -22,6 +22,7 @@
   </Target>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.102.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <!-- Use PdfSharpCore NuGet package for PDF generation instead of the local shim. -->
     <PackageReference Include="PdfSharpCore" Version="1.*" />

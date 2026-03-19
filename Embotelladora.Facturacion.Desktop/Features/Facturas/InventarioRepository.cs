@@ -263,6 +263,36 @@ WHERE Id = @productoId;";
         }
     }
 
+    /// <summary>
+    /// Elimina el producto si no tiene ítems de factura asociados; en caso contrario lo desactiva.
+    /// Retorna <c>true</c> si fue eliminado físicamente, <c>false</c> si fue desactivado.
+    /// </summary>
+    public bool DeleteOrDeactivate(long id)
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var checkCmd = connection.CreateCommand();
+        checkCmd.CommandText = "SELECT COUNT(1) FROM ItemFactura WHERE ProductoId = @id;";
+        checkCmd.Parameters.AddWithValue("@id", id);
+        var tieneFacturas = Convert.ToInt32(checkCmd.ExecuteScalar()) > 0;
+
+        using var cmd = connection.CreateCommand();
+        if (tieneFacturas)
+        {
+            cmd.CommandText = "UPDATE ProductoExt SET Activo = 0 WHERE Id = @id;";
+        }
+        else
+        {
+            cmd.CommandText = "DELETE FROM ProductoExt WHERE Id = @id;";
+        }
+
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+
+        return !tieneFacturas;
+    }
+
     public void CrearProducto(ProductoCreateRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Codigo))

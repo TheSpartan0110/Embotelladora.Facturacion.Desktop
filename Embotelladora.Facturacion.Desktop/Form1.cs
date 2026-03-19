@@ -1405,7 +1405,7 @@ public partial class Form1 : Form
         };
         summaryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         summaryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        summaryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
+        summaryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 216));
 
         var summaryTitle = new Label
         {
@@ -1465,10 +1465,11 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Margin = Padding.Empty,
             Padding = new Padding(0, 12, 0, 0)
         };
+        buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -1520,6 +1521,22 @@ public partial class Form1 : Form
         btnDraft.FlatAppearance.BorderColor = Color.FromArgb(222, 226, 219);
         btnDraft.Click += (_, _) => ClearInvoiceForm();
         buttonPanel.Controls.Add(btnDraft, 0, 2);
+
+        var btnExportExcelDraft = new Button
+        {
+            Text = "📊 Exportar a Excel",
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(245, 247, 245),
+            ForeColor = Color.FromArgb(33, 33, 33),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10),
+            Margin = new Padding(0, 6, 0, 0),
+            Cursor = Cursors.Hand
+        };
+        btnExportExcelDraft.FlatAppearance.BorderSize = 1;
+        btnExportExcelDraft.FlatAppearance.BorderColor = Color.FromArgb(222, 226, 219);
+        btnExportExcelDraft.Click += (_, _) => ExportInvoiceDraftToExcel();
+        buttonPanel.Controls.Add(btnExportExcelDraft, 0, 3);
 
         summaryLayout.Controls.Add(buttonPanel, 0, 2);
         summaryCard.Controls.Add(summaryLayout);
@@ -4233,7 +4250,7 @@ public partial class Form1 : Form
         {
             Name = "Acciones",
             HeaderText = "Acciones",
-            Width = 180,
+            Width = 220,
             ReadOnly = true,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
@@ -4265,6 +4282,7 @@ public partial class Form1 : Form
             1 => "Imprimir",
             2 => "Anular",
             3 => "Eliminar",
+            4 => "ExportarExcel",
             _ => null
         };
 
@@ -4287,6 +4305,9 @@ public partial class Form1 : Form
             case "Eliminar":
                 DeleteInvoice(factura.Id);
                 break;
+            case "ExportarExcel":
+                ExportInvoiceToExcel(factura.Id);
+                break;
         }
     }
 
@@ -4306,20 +4327,22 @@ public partial class Form1 : Form
         e.PaintBackground(e.CellBounds, true);
 
         var buttonBounds = GetInvoiceActionButtonBounds(e.CellBounds.Size);
-        var icons = new[] { "👁", "🖨", "🚫", "🗑" };
+        var icons = new[] { "👁", "🖨", "🚫", "🗑", "📊" };
         var backColors = new[]
         {
             Color.FromArgb(232, 245, 255),
             Color.FromArgb(240, 247, 240),
             Color.FromArgb(255, 245, 225),
-            Color.FromArgb(255, 235, 235)
+            Color.FromArgb(255, 235, 235),
+            Color.FromArgb(235, 255, 235)
         };
         var foreColors = new[]
         {
             Color.FromArgb(42, 104, 176),
             Color.FromArgb(33, 99, 42),
             Color.FromArgb(176, 120, 12),
-            Color.FromArgb(180, 40, 40)
+            Color.FromArgb(180, 40, 40),
+            Color.FromArgb(20, 120, 20)
         };
 
         using var font = new Font("Segoe UI Emoji", 10, FontStyle.Regular);
@@ -4385,7 +4408,7 @@ public partial class Form1 : Form
         const int buttonWidth = 32;
         const int buttonHeight = 24;
         const int spacing = 8;
-        var totalWidth = (buttonWidth * 4) + (spacing * 3);
+        var totalWidth = (buttonWidth * 5) + (spacing * 4);
         var startX = Math.Max(6, (cellSize.Width - totalWidth) / 2);
         var startY = Math.Max(4, (cellSize.Height - buttonHeight) / 2);
 
@@ -4394,7 +4417,8 @@ public partial class Form1 : Form
             new Rectangle(startX, startY, buttonWidth, buttonHeight),
             new Rectangle(startX + buttonWidth + spacing, startY, buttonWidth, buttonHeight),
             new Rectangle(startX + ((buttonWidth + spacing) * 2), startY, buttonWidth, buttonHeight),
-            new Rectangle(startX + ((buttonWidth + spacing) * 3), startY, buttonWidth, buttonHeight)
+            new Rectangle(startX + ((buttonWidth + spacing) * 3), startY, buttonWidth, buttonHeight),
+            new Rectangle(startX + ((buttonWidth + spacing) * 4), startY, buttonWidth, buttonHeight)
         ];
     }
 
@@ -4518,7 +4542,110 @@ public partial class Form1 : Form
         ShowInvoicePrintPreview(invoice, $"Factura-Borrador-{DateTime.Now:yyyyMMddHHmmss}", true);
     }
 
-    private void ShowInvoicePrintPreview(InvoicePrintDetailDto invoice, string documentName, bool isDraft)
+    private void ExportInvoiceDraftToExcel()
+    {
+        if (_cmbInvoiceCustomer.SelectedItem is not InvoiceCustomerLookupDto customer)
+        {
+            MessageBox.Show("Selecciona un cliente antes de exportar.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (_invoiceItems.Count == 0)
+        {
+            MessageBox.Show("Agrega al menos un ítem antes de exportar.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var paymentMethod = _cmbInvoicePaymentMethod.SelectedItem as PaymentMethodLookupDto;
+        var totals = ComputeInvoiceTotals();
+
+        var invoice = new InvoicePrintDetailDto
+        {
+            Numero = "BORRADOR",
+            Fecha = _dtpInvoiceDate.Value.Date,
+            Cliente = customer.Nombre,
+            Nit = customer.Nit,
+            Direccion = string.Empty,
+            MetodoPago = paymentMethod?.Nombre ?? "-",
+            Estado = "Borrador",
+            Subtotal = totals.subtotal,
+            Retencion = 0,
+            Total = totals.total,
+            Saldo = totals.total,
+            Notas = _txtInvoiceNotes.Text,
+            Items = _invoiceItems.Select(item => new InvoicePrintItemDto
+            {
+                Codigo = item.Codigo,
+                Descripcion = item.Descripcion,
+                Cantidad = item.Cantidad,
+                PrecioUnitario = item.PrecioUnitario,
+                TotalLinea = item.TotalLinea
+            }).ToList()
+        };
+
+        ExportInvoiceDto(invoice, $"factura-BORRADOR-{DateTime.Now:yyyyMMdd}");
+    }
+
+    private void ExportInvoiceToExcel(long invoiceId)
+    {
+        var invoice = _invoiceRepository.GetInvoicePrintDetail(invoiceId);
+        if (invoice is null)
+        {
+            MessageBox.Show("No se encontró la factura para exportar.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        ExportInvoiceDto(invoice, $"factura-{invoice.Numero}-{invoice.Fecha:yyyyMMdd}");
+    }
+
+    private void ExportInvoiceDto(InvoicePrintDetailDto invoice, string defaultFileName)
+    {
+        using var dlg = new SaveFileDialog
+        {
+            Title = "Exportar factura a Excel",
+            Filter = "Excel (*.xlsx)|*.xlsx",
+            FileName = defaultFileName + ".xlsx",
+            DefaultExt = "xlsx"
+        };
+
+        if (dlg.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var filePath = dlg.FileName;
+
+        try
+        {
+            var service = new ClosedXmlExcelExportService();
+            service.ExportInvoice(invoice, filePath);
+            MessageBox.Show($"Factura exportada correctamente:\n{filePath}", "Exportar a Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show(
+                $"No se pudo guardar el archivo. Verifique que no esté abierto en otro programa y que tenga permisos de escritura.\n\nDetalle: {ex.Message}",
+                "Error al exportar",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            MessageBox.Show(
+                $"No tiene permisos para escribir en la ubicación seleccionada.\n\nDetalle: {ex.Message}",
+                "Error al exportar",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Error al exportar la factura:\n{ex.Message}",
+                "Error al exportar",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
     {
         // Build a print document for preview that supports pagination when the bottom box does not fit
         var previewDoc = new System.Drawing.Printing.PrintDocument { DocumentName = documentName };
@@ -7578,6 +7705,7 @@ ORDER BY Codigo;";
         };
         ConfigureGridStyle(_gridProductosInventario);
         _gridProductosInventario.SelectionChanged += (_, _) => OnProductoInventarioSelected();
+        _gridProductosInventario.CellContentClick += OnProductosInventarioCellContentClick;
         AddGridWithTopMargin(productosCard, _gridProductosInventario, 20);
 
         contentLayout.Controls.Add(productosCard, 0, 0);
@@ -7684,6 +7812,8 @@ ORDER BY Codigo;";
         var productos = _inventarioRepository.GetProductos(search);
         _gridProductosInventario.DataSource = productos;
 
+        EnsureInventarioActionColumns();
+
         if (_gridProductosInventario.Columns.Count > 0)
         {
             _gridProductosInventario.Columns["Id"]!.Visible = false;
@@ -7727,6 +7857,26 @@ ORDER BY Codigo;";
                 }
             }
         }
+    }
+
+    private void EnsureInventarioActionColumns()
+    {
+        if (_gridProductosInventario.Columns.Contains("AccionEliminarProducto"))
+        {
+            return;
+        }
+
+        _gridProductosInventario.Columns.Add(new DataGridViewButtonColumn
+        {
+            Name = "AccionEliminarProducto",
+            HeaderText = "Acción",
+            Text = "🗑 Eliminar",
+            UseColumnTextForButtonValue = true,
+            Width = 110,
+            FlatStyle = FlatStyle.Flat,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+        });
     }
 
     private void OnProductoInventarioSelected()

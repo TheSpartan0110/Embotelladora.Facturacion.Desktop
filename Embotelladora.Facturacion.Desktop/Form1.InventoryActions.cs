@@ -4,6 +4,56 @@ namespace Embotelladora.Facturacion.Desktop;
 
 public partial class Form1
 {
+    private void OnProductosInventarioCellContentClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0)
+        {
+            return;
+        }
+
+        if (_gridProductosInventario.Columns[e.ColumnIndex].Name != "AccionEliminarProducto")
+        {
+            return;
+        }
+
+        if (_gridProductosInventario.Rows[e.RowIndex].DataBoundItem is not ProductoInventarioDto producto)
+        {
+            return;
+        }
+
+        var confirmacion = MessageBox.Show(
+            $"¿Está seguro de que desea eliminar el producto \"{producto.Nombre}\" (Código: {producto.Codigo})?\n\n" +
+            "Si el producto tiene facturas asociadas, será desactivado en lugar de eliminado.",
+            "Confirmar eliminación",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        if (confirmacion != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            var eliminado = _inventarioRepository.DeleteOrDeactivate(producto.Id);
+            var mensaje = eliminado
+                ? $"El producto \"{producto.Nombre}\" fue eliminado correctamente."
+                : $"El producto \"{producto.Nombre}\" fue desactivado porque tiene facturas asociadas.";
+
+            MessageBox.Show(mensaje, "Inventario", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LoadInventario();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Error al eliminar el producto:\n{ex.Message}",
+                "Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
     private void OpenInventoryMovementDialog()
     {
         var products = _inventarioRepository.GetProductos();
