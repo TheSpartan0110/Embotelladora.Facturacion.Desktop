@@ -4553,7 +4553,7 @@ public partial class Form1 : Form
             }).ToList()
         };
 
-        ExportInvoiceDtoToExcel(invoice, $"factura-borrador-{DateTime.Now:yyyyMMddHHmmss}");
+        ExportInvoiceDtoToExcel(invoice, $"factura-borrador-{DateTime.Today:yyyyMMdd}");
     }
 
     private void ExportInvoiceDtoToExcel(InvoicePrintDetailDto invoice, string suggestedFileName)

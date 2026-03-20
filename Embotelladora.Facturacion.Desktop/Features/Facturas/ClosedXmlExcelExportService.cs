@@ -11,6 +11,9 @@ internal sealed class ClosedXmlExcelExportService : IExcelExportService
     // evitar inyección de fórmulas (CSV/Excel injection).
     private static readonly char[] FormulaStartChars = ['=', '+', '-', '@'];
 
+    // Color de cabecera de la tabla de ítems (verde corporativo).
+    private static readonly XLColor HeaderBackgroundColor = XLColor.FromArgb(45, 111, 26);
+
     /// <inheritdoc/>
     public void ExportInvoice(InvoicePrintDetailDto invoice, string filePath)
     {
@@ -88,7 +91,7 @@ internal sealed class ClosedXmlExcelExportService : IExcelExportService
 
         var headerRange = ws.Range(row, 1, row, 5);
         headerRange.Style.Font.Bold = true;
-        headerRange.Style.Fill.BackgroundColor = XLColor.FromArgb(45, 111, 26);
+        headerRange.Style.Fill.BackgroundColor = HeaderBackgroundColor;
         headerRange.Style.Font.FontColor = XLColor.White;
         headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         row++;
