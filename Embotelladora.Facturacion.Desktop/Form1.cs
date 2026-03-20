@@ -27,6 +27,7 @@ public partial class Form1 : Form
     private readonly CarteraRepository _carteraRepository = new();
     private readonly BalanceRepository _balanceRepository = new();
     private readonly InventarioRepository _inventarioRepository = new();
+    private readonly IExcelExportService _excelExportService = new ClosedXmlExcelExportService();
     private readonly Dictionary<string, Button> _menuButtons = [];
     private readonly BindingList<InvoiceItemDraft> _invoiceItems = [];
     private FlowLayoutPanel _sidebarMenu = null!;
@@ -1465,10 +1466,11 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Margin = Padding.Empty,
             Padding = new Padding(0, 12, 0, 0)
         };
+        buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         buttonPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -1505,6 +1507,23 @@ public partial class Form1 : Form
         btnPrintInvoice.Click += (_, _) => PrintCurrentInvoiceDraft();
         buttonPanel.Controls.Add(btnPrintInvoice, 0, 1);
 
+        var btnExportExcel = new Button
+        {
+            Text = "📊 Exportar a Excel",
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            ForeColor = Color.FromArgb(45, 55, 45),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10),
+            Margin = new Padding(0, 0, 0, 6),
+            Cursor = Cursors.Hand
+        };
+        btnExportExcel.FlatAppearance.BorderSize = 1;
+        btnExportExcel.FlatAppearance.BorderColor = Color.FromArgb(214, 218, 210);
+        btnExportExcel.FlatAppearance.MouseOverBackColor = Color.FromArgb(246, 248, 244);
+        btnExportExcel.Click += (_, _) => ExportCurrentInvoiceDraftToExcel();
+        buttonPanel.Controls.Add(btnExportExcel, 0, 2);
+
         var btnDraft = new Button
         {
             Text = "🧹 Limpiar formulario",
@@ -1519,7 +1538,7 @@ public partial class Form1 : Form
         btnDraft.FlatAppearance.BorderSize = 1;
         btnDraft.FlatAppearance.BorderColor = Color.FromArgb(222, 226, 219);
         btnDraft.Click += (_, _) => ClearInvoiceForm();
-        buttonPanel.Controls.Add(btnDraft, 0, 2);
+        buttonPanel.Controls.Add(btnDraft, 0, 3);
 
         summaryLayout.Controls.Add(buttonPanel, 0, 2);
         summaryCard.Controls.Add(summaryLayout);
@@ -4233,7 +4252,7 @@ public partial class Form1 : Form
         {
             Name = "Acciones",
             HeaderText = "Acciones",
-            Width = 180,
+            Width = 220,
             ReadOnly = true,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
@@ -4265,6 +4284,7 @@ public partial class Form1 : Form
             1 => "Imprimir",
             2 => "Anular",
             3 => "Eliminar",
+            4 => "Exportar",
             _ => null
         };
 
@@ -4287,6 +4307,9 @@ public partial class Form1 : Form
             case "Eliminar":
                 DeleteInvoice(factura.Id);
                 break;
+            case "Exportar":
+                ExportInvoiceToExcel(factura.Id);
+                break;
         }
     }
 
@@ -4306,20 +4329,22 @@ public partial class Form1 : Form
         e.PaintBackground(e.CellBounds, true);
 
         var buttonBounds = GetInvoiceActionButtonBounds(e.CellBounds.Size);
-        var icons = new[] { "👁", "🖨", "🚫", "🗑" };
+        var icons = new[] { "👁", "🖨", "🚫", "🗑", "📊" };
         var backColors = new[]
         {
             Color.FromArgb(232, 245, 255),
             Color.FromArgb(240, 247, 240),
             Color.FromArgb(255, 245, 225),
-            Color.FromArgb(255, 235, 235)
+            Color.FromArgb(255, 235, 235),
+            Color.FromArgb(232, 248, 240)
         };
         var foreColors = new[]
         {
             Color.FromArgb(42, 104, 176),
             Color.FromArgb(33, 99, 42),
             Color.FromArgb(176, 120, 12),
-            Color.FromArgb(180, 40, 40)
+            Color.FromArgb(180, 40, 40),
+            Color.FromArgb(20, 128, 70)
         };
 
         using var font = new Font("Segoe UI Emoji", 10, FontStyle.Regular);
@@ -4384,8 +4409,8 @@ public partial class Form1 : Form
     {
         const int buttonWidth = 32;
         const int buttonHeight = 24;
-        const int spacing = 8;
-        var totalWidth = (buttonWidth * 4) + (spacing * 3);
+        const int spacing = 6;
+        var totalWidth = (buttonWidth * 5) + (spacing * 4);
         var startX = Math.Max(6, (cellSize.Width - totalWidth) / 2);
         var startY = Math.Max(4, (cellSize.Height - buttonHeight) / 2);
 
@@ -4394,7 +4419,8 @@ public partial class Form1 : Form
             new Rectangle(startX, startY, buttonWidth, buttonHeight),
             new Rectangle(startX + buttonWidth + spacing, startY, buttonWidth, buttonHeight),
             new Rectangle(startX + ((buttonWidth + spacing) * 2), startY, buttonWidth, buttonHeight),
-            new Rectangle(startX + ((buttonWidth + spacing) * 3), startY, buttonWidth, buttonHeight)
+            new Rectangle(startX + ((buttonWidth + spacing) * 3), startY, buttonWidth, buttonHeight),
+            new Rectangle(startX + ((buttonWidth + spacing) * 4), startY, buttonWidth, buttonHeight)
         ];
     }
 
@@ -4516,6 +4542,98 @@ public partial class Form1 : Form
         };
 
         ShowInvoicePrintPreview(invoice, $"Factura-Borrador-{DateTime.Now:yyyyMMddHHmmss}", true);
+    }
+
+    private void ExportCurrentInvoiceDraftToExcel()
+    {
+        if (_cmbInvoiceCustomer.SelectedItem is not InvoiceCustomerLookupDto customer)
+        {
+            MessageBox.Show("Selecciona un cliente antes de exportar a Excel.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (_invoiceItems.Count == 0)
+        {
+            MessageBox.Show("Agrega al menos un ítem antes de exportar la factura.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var paymentMethod = _cmbInvoicePaymentMethod.SelectedItem as PaymentMethodLookupDto;
+        var totals = ComputeInvoiceTotals();
+
+        var invoice = new InvoicePrintDetailDto
+        {
+            Numero = "BORRADOR",
+            Fecha = _dtpInvoiceDate.Value.Date,
+            Cliente = customer.Nombre,
+            Nit = customer.Nit,
+            Direccion = string.Empty,
+            MetodoPago = paymentMethod?.Nombre ?? "-",
+            Estado = "Borrador",
+            Subtotal = totals.subtotal,
+            Retencion = 0,
+            Total = totals.total,
+            Saldo = totals.total,
+            Notas = _txtInvoiceNotes.Text,
+            Items = _invoiceItems.Select(item => new InvoicePrintItemDto
+            {
+                Codigo = item.Codigo,
+                Descripcion = item.Descripcion,
+                Cantidad = item.Cantidad,
+                PrecioUnitario = item.PrecioUnitario,
+                TotalLinea = item.TotalLinea
+            }).ToList()
+        };
+
+        ExportInvoiceToExcelWithDialog(invoice, $"factura-BORRADOR-{DateTime.Now:yyyyMMdd}");
+    }
+
+    private void ExportInvoiceToExcel(long invoiceId)
+    {
+        var invoice = _invoiceRepository.GetInvoicePrintDetail(invoiceId);
+        if (invoice is null)
+        {
+            MessageBox.Show("No se encontró la factura para exportar.", "Facturas", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        ExportInvoiceToExcelWithDialog(invoice, $"factura-{invoice.Numero}-{invoice.Fecha:yyyyMMdd}");
+    }
+
+    private void ExportInvoiceToExcelWithDialog(InvoicePrintDetailDto invoice, string defaultFileName)
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Exportar factura a Excel",
+            Filter = "Excel (*.xlsx)|*.xlsx|Todos los archivos (*.*)|*.*",
+            DefaultExt = "xlsx",
+            FileName = defaultFileName
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var filePath = dialog.FileName;
+
+        try
+        {
+            _excelExportService.ExportInvoice(invoice, filePath);
+            MessageBox.Show($"Factura exportada correctamente:\n{filePath}", "Exportar a Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show(
+                $"No se pudo guardar el archivo. Verifique que no esté abierto en otra aplicación.\n\nDetalle: {ex.Message}",
+                "Error al exportar",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error al exportar a Excel:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void ShowInvoicePrintPreview(InvoicePrintDetailDto invoice, string documentName, bool isDraft)
@@ -7578,6 +7696,7 @@ ORDER BY Codigo;";
         };
         ConfigureGridStyle(_gridProductosInventario);
         _gridProductosInventario.SelectionChanged += (_, _) => OnProductoInventarioSelected();
+        _gridProductosInventario.CellContentClick += OnProductosInventarioCellContentClick;
         AddGridWithTopMargin(productosCard, _gridProductosInventario, 20);
 
         contentLayout.Controls.Add(productosCard, 0, 0);
@@ -7706,6 +7825,8 @@ ORDER BY Codigo;";
             _gridProductosInventario.Columns["EstadoStock"]!.HeaderText = "Estado";
             _gridProductosInventario.Columns["EstadoStock"]!.Width = 90;
 
+            EnsureInventarioActionColumns();
+
             // Colorear según estado
             foreach (DataGridViewRow row in _gridProductosInventario.Rows)
             {
@@ -7830,6 +7951,25 @@ ORDER BY Codigo;";
                 }
             }
         }
+    }
+
+    private void EnsureInventarioActionColumns()
+    {
+        if (_gridProductosInventario.Columns.Contains("AccionEliminarProducto"))
+        {
+            return;
+        }
+
+        _gridProductosInventario.Columns.Add(new DataGridViewButtonColumn
+        {
+            Name = "AccionEliminarProducto",
+            HeaderText = "Acción",
+            Text = "🗑 Eliminar",
+            UseColumnTextForButtonValue = true,
+            Width = 100,
+            FlatStyle = FlatStyle.Flat,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        });
     }
 
     private sealed class InvoiceItemDraft

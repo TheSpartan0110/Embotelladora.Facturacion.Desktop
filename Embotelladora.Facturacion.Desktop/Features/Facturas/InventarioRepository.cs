@@ -263,6 +263,18 @@ WHERE Id = @productoId;";
         }
     }
 
+    public void SetActive(long id, bool active)
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE ProductoExt SET Activo = @activo WHERE Id = @id;";
+        command.Parameters.AddWithValue("@activo", active ? 1 : 0);
+        command.Parameters.AddWithValue("@id", id);
+        command.ExecuteNonQuery();
+    }
+
     public void CrearProducto(ProductoCreateRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Codigo))

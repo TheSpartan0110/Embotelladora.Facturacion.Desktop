@@ -4,6 +4,46 @@ namespace Embotelladora.Facturacion.Desktop;
 
 public partial class Form1
 {
+    private void OnProductosInventarioCellContentClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0)
+        {
+            return;
+        }
+
+        var col = _gridProductosInventario.Columns["AccionEliminarProducto"];
+        if (col is null || e.ColumnIndex != col.Index)
+        {
+            return;
+        }
+
+        if (_gridProductosInventario.Rows[e.RowIndex].DataBoundItem is not ProductoInventarioDto producto)
+        {
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"¿Desactivar el producto '{producto.Nombre}'?\n\nEl producto será desactivado y no aparecerá en nuevas facturas.",
+            "¿Desactivar producto?",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _inventarioRepository.SetActive(producto.Id, false);
+            LoadInventario();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error al desactivar el producto:\n{ex.Message}", "Inventario", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void OpenInventoryMovementDialog()
     {
         var products = _inventarioRepository.GetProductos();
