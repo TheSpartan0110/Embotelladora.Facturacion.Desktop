@@ -335,4 +335,37 @@ VALUES (@productoId, @fecha, 'ENTRADA', @cantidad, NULL, @nota);";
             throw;
         }
     }
+
+    /// <summary>
+    /// Elimina o desactiva un producto del inventario.
+    /// Si el producto tiene movimientos o aparece en facturas se desactiva (Activo = 0);
+    /// de lo contrario se elimina físicamente.
+    /// </summary>
+    /// <returns><c>true</c> si se realizó algún cambio en la base de datos.</returns>
+    public bool EliminarProducto(long id)
+    {
+        using var connection = AppDatabase.CreateConnection();
+        connection.Open();
+
+        using var checkCmd = connection.CreateCommand();
+        checkCmd.CommandText = @"
+SELECT
+    (SELECT COUNT(1) FROM MovimientoInventarioExt WHERE ProductoId = @id) +
+    (SELECT COUNT(1) FROM ItemFactura       WHERE ProductoId = @id);";
+        checkCmd.Parameters.AddWithValue("@id", id);
+        var usos = Convert.ToInt64(checkCmd.ExecuteScalar() ?? 0L);
+
+        using var cmd = connection.CreateCommand();
+        if (usos > 0)
+        {
+            cmd.CommandText = "UPDATE ProductoExt SET Activo = 0 WHERE Id = @id;";
+        }
+        else
+        {
+            cmd.CommandText = "DELETE FROM ProductoExt WHERE Id = @id;";
+        }
+
+        cmd.Parameters.AddWithValue("@id", id);
+        return cmd.ExecuteNonQuery() > 0;
+    }
 }
