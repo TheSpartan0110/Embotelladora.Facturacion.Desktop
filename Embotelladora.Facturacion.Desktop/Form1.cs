@@ -4750,7 +4750,52 @@ public partial class Form1 : Form
                 rowHeight = Math.Max(12.0, textSize.Height + 8.0);
             }
 
-            // Column width helpers were removed to avoid unused local-function warnings.
+            // Helper to compute column widths defensively to avoid IndexOutOfRange
+            double[] ComputeColWidths(int colsCount, double[]? weightsArr, double totalWidth)
+            {
+                if (colsCount <= 0) return Array.Empty<double>();
+                var weights = weightsArr ?? Enumerable.Repeat(1.0, colsCount).ToArray();
+                if (weights.Length != colsCount)
+                {
+                    weights = Enumerable.Repeat(1.0, colsCount).ToArray();
+                }
+
+                var totalWeightLocal = weights.Sum();
+                if (totalWeightLocal == 0) totalWeightLocal = colsCount;
+                var colWidthsLocal = new double[colsCount];
+                for (var i = 0; i < colsCount; i++) colWidthsLocal[i] = Math.Round((weights[i] / totalWeightLocal) * totalWidth, 2);
+                var sumWLocal = colWidthsLocal.Sum();
+                if (Math.Abs(sumWLocal - totalWidth) > 0.01 && colsCount > 0)
+                {
+                    colWidthsLocal[colsCount - 1] += totalWidth - sumWLocal;
+                }
+
+                return colWidthsLocal;
+            }
+
+            // Normalize widths to avoid zero/negative widths which can produce invalid PDF objects
+            double[] NormalizeWidths(double[] widths, double totalWidth)
+            {
+                if (widths == null || widths.Length == 0) return Array.Empty<double>();
+                // Clamp minimum width
+                for (var i = 0; i < widths.Length; i++)
+                {
+                    if (double.IsNaN(widths[i]) || double.IsInfinity(widths[i]) || widths[i] <= 0)
+                        widths[i] = 1.0;
+                }
+                // Adjust last element to match totalWidth to avoid tiny rounding gaps
+                var sum = widths.Sum();
+                if (Math.Abs(sum - totalWidth) > 0.01 && widths.Length > 0)
+                {
+                    widths[widths.Length - 1] += totalWidth - sum;
+                }
+                // Final clamp
+                for (var i = 0; i < widths.Length; i++)
+                {
+                    if (widths[i] < 0.5) widths[i] = 0.5;
+                }
+                return widths;
+            }
 
             // Layout constants used for height calculation
             // Compute layout metrics proportionally from page dimensions
@@ -4776,106 +4821,319 @@ public partial class Form1 : Form
             var targetWidthPts = a4WidthPts;
 
             // If the content fits in a single page using dynamic height, create one page with that exact height.
-            // Otherwise paginate across A4 pages. Render each page to a high-DPI PNG, load with XImage.FromFile and embed.
-            const int renderDpi = 150; // DPI for temporary PNG rasterization
+            // Otherwise paginate across A4 pages.
             if (requiredPts <= a4HeightPts)
             {
+                // Single dynamic-height page
                 var page = pdf.AddPage();
                 page.Width = XUnit.FromPoint(targetWidthPts);
                 page.Height = XUnit.FromPoint(requiredPts);
+                using var gfxPage = XGraphics.FromPdfPage(page);
 
-                // Compute bitmap pixel dimensions for the desired DPI
-                var bmpWidthPx = Math.Max(1, (int)Math.Round(targetWidthPts / 72.0 * renderDpi));
-                var bmpHeightPx = Math.Max(1, (int)Math.Round(requiredPts / 72.0 * renderDpi));
+                // Render a single page with all items using proportional layout
+                var pageLeft = marginPts;
+                var pageTop = marginPts;
+                var pageWidth = page.Width.Point - marginPts * 2;
+                var pageHeight = page.Height.Point - marginPts * 2;
 
-                var tmpPng = Path.Combine(Path.GetTempPath(), $"invoice_{Guid.NewGuid():N}.png");
-                try
+                // fonts and pens
+                var fontTitle = new XFont("Times New Roman", 18, XFontStyle.BoldItalic);
+                var fontSubtitle = new XFont("Times New Roman", 14, XFontStyle.Bold);
+                var fontSection = new XFont("Times New Roman", 11, XFontStyle.Bold);
+                var fontText = new XFont("Times New Roman", 10, XFontStyle.Regular);
+                var fontSmall = new XFont("Times New Roman", 9, XFontStyle.Regular);
+                var fontMono = new XFont("Consolas", 9, XFontStyle.Regular);
+                var blackPen = new XPen(XColors.Black, 0.8);
+                var thinPen = new XPen(XColors.Black, 0.5);
+                var centerFormat = new XStringFormat { Alignment = XStringAlignment.Center, LineAlignment = XLineAlignment.Center };
+                var leftFormat = new XStringFormat { Alignment = XStringAlignment.Near, LineAlignment = XLineAlignment.Center };
+                var rightFormat = new XStringFormat { Alignment = XStringAlignment.Far, LineAlignment = XLineAlignment.Center };
+                // draw header area proportionally
+                var rightBoxWidth = Math.Min(140.0, pageWidth * 0.22);
+                var headerLeftWidth = pageWidth - rightBoxWidth - 16.0;
+                var headerAreaHeight = Math.Min( headerSectionHeight, pageHeight * 0.25 );
+                gfxPage.DrawString(string.IsNullOrWhiteSpace(_invoiceSettings.CompanyName) ? "ACEITESPRO FACTURACIÓN" : _invoiceSettings.CompanyName, fontTitle, XBrushes.Black, new XRect(pageLeft, pageTop, headerLeftWidth, headerAreaHeight * 0.5), centerFormat);
+                gfxPage.DrawString(string.IsNullOrWhiteSpace(_invoiceSettings.Subtitle) ? "Documento comercial" : _invoiceSettings.Subtitle, fontSubtitle, XBrushes.Black, new XRect(pageLeft, pageTop + headerAreaHeight * 0.5, headerLeftWidth, headerAreaHeight * 0.5), centerFormat);
+
+                var extraY = pageTop + headerAreaHeight;
+                if (!string.IsNullOrWhiteSpace(_invoiceSettings.NitLine))
                 {
-                    using var bmp = new Bitmap(bmpWidthPx, bmpHeightPx);
-                    bmp.SetResolution(renderDpi, renderDpi);
-                    using (var g = Graphics.FromImage(bmp))
-                    {
-                        g.PageUnit = GraphicsUnit.Point; // match DrawInvoicePrintPage's units
-                        DrawInvoicePrintPage(g, new Rectangle(0, 0, (int)Math.Ceiling((double)targetWidthPts), (int)Math.Ceiling((double)requiredPts)), invoice, isDraft, 0, int.MaxValue);
-                    }
-
-                    bmp.Save(tmpPng, System.Drawing.Imaging.ImageFormat.Png);
-
-                    using var gfxPage = XGraphics.FromPdfPage(page);
-                    using var img = XImage.FromFile(tmpPng);
-                    gfxPage.DrawImage(img, 0, 0, page.Width.Point, page.Height.Point);
+                    gfxPage.DrawString(_invoiceSettings.NitLine, fontText, XBrushes.Black, new XRect(pageLeft, extraY, headerLeftWidth, 14), centerFormat);
+                    extraY += 14.0;
                 }
-                finally
+                if (!string.IsNullOrWhiteSpace(_invoiceSettings.AddressLine))
                 {
-                    try { if (File.Exists(tmpPng)) File.Delete(tmpPng); } catch { }
+                    gfxPage.DrawString(_invoiceSettings.AddressLine, fontText, XBrushes.Black, new XRect(pageLeft, extraY, headerLeftWidth, 14), centerFormat);
                 }
+
+                // document box on right
+                var docX = pageLeft + headerLeftWidth + 16.0;
+                var docY = pageTop;
+                var docW = rightBoxWidth;
+                var docH = Math.Min(78.0, headerAreaHeight);
+                gfxPage.DrawRectangle(blackPen, docX, docY, docW, docH);
+                gfxPage.DrawLine(blackPen, docX, docY + docH * 0.33, docX + docW, docY + docH * 0.33);
+                gfxPage.DrawString(isDraft ? "FACTURA BORRADOR" : "FACTURA", fontSection, XBrushes.Black, new XRect(docX, docY, docW, docH * 0.33), centerFormat);
+                gfxPage.DrawString("Nro:", fontText, XBrushes.Black, new XRect(docX + 8, docY + docH * 0.36, 36, 14), leftFormat);
+                gfxPage.DrawString(invoice.Numero, fontSection, XBrushes.Black, new XRect(docX + 44, docY + docH * 0.34, docW - 54, 18), leftFormat);
+                gfxPage.DrawString("Fecha:", fontText, XBrushes.Black, new XRect(docX + 8, docY + docH * 0.66, 44, 14), leftFormat);
+                gfxPage.DrawString(invoice.Fecha.ToString("dd/MM/yyyy"), fontText, XBrushes.Black, new XRect(docX + 54, docY + docH * 0.66, docW - 64, 14), leftFormat);
+
+                // info box
+                var infoY = pageTop + headerAreaHeight + 8.0;
+                var infoH = infoBoxHeight;
+                gfxPage.DrawRectangle(blackPen, pageLeft, infoY, pageWidth, infoH);
+                var lineY2 = infoY + 10.0;
+                gfxPage.DrawString($"Recibimos de:  {invoice.Cliente}", fontText, XBrushes.Black, new XRect(pageLeft + 8, lineY2, pageWidth * 0.7, 16), leftFormat);
+                gfxPage.DrawString($"Nit:  {invoice.Nit}", fontText, XBrushes.Black, new XRect(pageLeft + pageWidth * 0.72, lineY2, pageWidth * 0.25, 16), leftFormat);
+
+                // table
+                var tableTop = infoY + infoH + 8.0;
+                var headerH = tableHeaderHeight;
+                var itemsOnPage = items; // all items
+                var currentRows = itemsOnPage.Count;
+                var tableHeight = headerH + (currentRows * rowHeight) + 8.0;
+                gfxPage.DrawRectangle(blackPen, pageLeft, tableTop, pageWidth, tableHeight);
+
+                var columnTitles = new[] { "Código", "Descripción", "Cant.", "Vr. Unitario", "Pago" };
+                var weights = new[] { 0.10, 0.50, 0.10, 0.15, 0.15 };
+                var headerBottom = tableTop + headerH;
+                gfxPage.DrawLine(thinPen, pageLeft, headerBottom, pageLeft + pageWidth, headerBottom);
+
+                var colWidths = NormalizeWidths(ComputeColWidths(columnTitles.Length, weights, pageWidth), pageWidth);
+                if (colWidths.Length < columnTitles.Length)
+                {
+                    // fallback: equal columns
+                    colWidths = NormalizeWidths(Enumerable.Repeat(pageWidth / columnTitles.Length, columnTitles.Length).ToArray(), pageWidth);
+                }
+
+                var xPos = pageLeft;
+                for (var i = 0; i < colWidths.Length; i++)
+                {
+                    if (i > 0) gfxPage.DrawLine(thinPen, xPos, tableTop, xPos, tableTop + tableHeight);
+                    var w = colWidths[i];
+                    gfxPage.DrawString(columnTitles[i], fontSection, XBrushes.Black, new XRect(xPos + 4, tableTop + 4, w - 8, 16), i >= 2 ? rightFormat : leftFormat);
+                    xPos += w;
+                }
+
+                for (var r = 0; r < itemsOnPage.Count; r++)
+                {
+                    var y = headerBottom + (r * rowHeight);
+                    gfxPage.DrawLine(thinPen, pageLeft, y + rowHeight, pageLeft + pageWidth, y + rowHeight);
+                    var item = itemsOnPage[r];
+                    var cx = pageLeft;
+                    gfxPage.DrawString(item.Codigo, fontMono, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[0] - 12, rowHeight - 8), leftFormat); cx += colWidths[0];
+                    gfxPage.DrawString(item.Descripcion, fontText, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[1] - 12, rowHeight - 8), leftFormat); cx += colWidths[1];
+                    gfxPage.DrawString(item.Cantidad.ToString("N0"), fontText, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[2] - 12, rowHeight - 8), rightFormat); cx += colWidths[2];
+                    gfxPage.DrawString(item.PrecioUnitario.ToString("N0"), fontText, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[3] - 12, rowHeight - 8), rightFormat); cx += colWidths[3];
+                    gfxPage.DrawString(item.TotalLinea.ToString("N0"), fontSection, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[4] - 12, rowHeight - 8), rightFormat);
+                }
+
+                // totals and bottom box (same as before)
+                var totalBarTop = tableTop + tableHeight + 4.0;
+                gfxPage.DrawRectangle(thinPen, pageLeft, totalBarTop, pageWidth, 26.0);
+                gfxPage.DrawString("Total Factura:", fontSection, XBrushes.Black, new XRect(pageLeft + pageWidth - 340, totalBarTop, 160, 26.0), rightFormat);
+                gfxPage.DrawString(invoice.Total.ToString("N0"), fontSection, XBrushes.Black, new XRect(pageLeft + pageWidth - 180, totalBarTop, 160, 26.0), rightFormat);
+
+                var bottomBoxTop = totalBarTop + 26.0 + 4.0;
+                gfxPage.DrawRectangle(blackPen, pageLeft, bottomBoxTop, pageWidth, bottomBoxHeight);
+                // Draw top separator of bottom box
+                gfxPage.DrawLine(thinPen, pageLeft, bottomBoxTop + 24.0, pageLeft + pageWidth, bottomBoxTop + 24.0);
+                var leftAreaPct = 0.60;
+                gfxPage.DrawLine(thinPen, pageLeft + (pageWidth * leftAreaPct), bottomBoxTop, pageLeft + (pageWidth * leftAreaPct), bottomBoxTop + bottomBoxHeight);
+                gfxPage.DrawString("Forma de pago", fontSection, XBrushes.Black, new XRect(pageLeft, bottomBoxTop, pageWidth * leftAreaPct, 24), centerFormat);
+                gfxPage.DrawString("Firma y Sello", fontSection, XBrushes.Black, new XRect(pageLeft + (pageWidth * leftAreaPct), bottomBoxTop, pageWidth * (1 - leftAreaPct), 24), centerFormat);
+
+                var bbLeft = pageLeft;
+                var bbWidth = pageWidth * leftAreaPct;
+                var bbPadding = 6.0;
+                var colPct = new[] { 0.18, 0.32, 0.20, 0.30 };
+                var bbCols = colPct.Select(p => p * bbWidth).ToArray();
+                var tmpX = bbLeft;
+                for (var i = 0; i < bbCols.Length - 1; i++) { tmpX += bbCols[i]; gfxPage.DrawLine(thinPen, tmpX, bottomBoxTop + 24.0, tmpX, bottomBoxTop + bottomBoxHeight); }
+
+                var pos = bbLeft;
+                gfxPage.DrawString("Referencia", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[0] - bbPadding * 2, 18), centerFormat); pos += bbCols[0];
+                gfxPage.DrawString("Banco / Medio", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[1] - bbPadding * 2, 18), centerFormat); pos += bbCols[1];
+                gfxPage.DrawString("Responsable", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[2] - bbPadding * 2, 18), centerFormat); pos += bbCols[2];
+                gfxPage.DrawString("Valor", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[3] - bbPadding * 2, 18), centerFormat);
+
+                pos = bbLeft;
+                gfxPage.DrawString(invoice.Numero, fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[0] - bbPadding * 2, 18), centerFormat); pos += bbCols[0];
+                gfxPage.DrawString(invoice.MetodoPago, fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[1] - bbPadding * 2, 18), centerFormat); pos += bbCols[1];
+                gfxPage.DrawString(invoice.Cliente, fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[2] - bbPadding * 2, 18), centerFormat); pos += bbCols[2];
+                gfxPage.DrawString(invoice.Total.ToString("N0"), fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[3] - bbPadding * 2, 18), rightFormat);
+
+                if (!string.IsNullOrWhiteSpace(invoice.Notas)) gfxPage.DrawString($"Notas: {invoice.Notas}", fontSmall, XBrushes.Black, new XRect(pageLeft + pageWidth * 0.57, bottomBoxTop + 30, pageWidth * 0.4, 34));
+                if (!string.IsNullOrWhiteSpace(_invoiceSettings.FooterText)) gfxPage.DrawString(_invoiceSettings.FooterText, fontSmall, XBrushes.DimGray, new XRect(pageLeft, bottomBoxTop + bottomBoxHeight + 6, pageWidth, 40), centerFormat);
             }
             else
             {
-                // Paginate: render each A4 page separately at high DPI and embed
+                // Content exceeds single A4 height -> paginate across A4 pages (existing behavior)
+                // Compute rowsPerPage for A4
                 var tableTopStart = marginPts + headerSectionHeight + infoBoxHeight + 8.0;
                 var reservedBelow = totalBarHeight + bottomBoxHeight + footerHeight + marginPts + 8.0;
                 var tableAvailable = a4HeightPts - tableTopStart - reservedBelow;
                 var rowsPerPage = Math.Max(1, (int)Math.Floor((tableAvailable - tableHeaderHeight - 8.0) / rowHeight));
 
                 var pageIndex = 0;
-                var tmpFiles = new List<string>();
-                try
+                while (pageIndex * rowsPerPage < items.Count || (items.Count == 0 && pageIndex == 0))
                 {
-                    while (pageIndex * rowsPerPage < items.Count || (items.Count == 0 && pageIndex == 0))
+                    var page = pdf.AddPage();
+                    // Use selected paper width (A4 or narrow receipt width) and A4 height for pagination
+                    page.Width = XUnit.FromPoint(targetWidthPts);
+                    page.Height = XUnit.FromPoint(a4HeightPts);
+
+                    using var gfxPage = XGraphics.FromPdfPage(page);
+
+                    // Layout constants
+                    var margin = marginPts;
+                    var pageLeft = margin;
+                    var pageTop = margin;
+                    var pageWidth = page.Width.Point - margin * 2;
+
+                    var fontTitle = new XFont("Times New Roman", 18, XFontStyle.BoldItalic);
+                    var fontSubtitle = new XFont("Times New Roman", 14, XFontStyle.Bold);
+                    var fontSection = new XFont("Times New Roman", 11, XFontStyle.Bold);
+                    var fontText = new XFont("Times New Roman", 10, XFontStyle.Regular);
+                    var fontSmall = new XFont("Times New Roman", 9, XFontStyle.Regular);
+                    var fontMono = new XFont("Consolas", 9, XFontStyle.Regular);
+
+                    var blackPen = new XPen(XColors.Black, 0.8);
+                    var thinPen = new XPen(XColors.Black, 0.5);
+
+                    var centerFormat = new XStringFormat { Alignment = XStringAlignment.Center, LineAlignment = XLineAlignment.Center };
+                    var leftFormat = new XStringFormat { Alignment = XStringAlignment.Near, LineAlignment = XLineAlignment.Center };
+                    var rightFormat = new XStringFormat { Alignment = XStringAlignment.Far, LineAlignment = XLineAlignment.Center };
+
+                    // Header
+                    var rightBoxWidth = Math.Min(140.0, pageWidth * 0.22);
+                    var headerLeftWidth = pageWidth - rightBoxWidth - 16.0;
+                    gfxPage.DrawString(string.IsNullOrWhiteSpace(_invoiceSettings.CompanyName) ? "ACEITESPRO FACTURACIÓN" : _invoiceSettings.CompanyName, fontTitle, XBrushes.Black, new XRect(pageLeft, pageTop, headerLeftWidth, 28), centerFormat);
+                    gfxPage.DrawString(string.IsNullOrWhiteSpace(_invoiceSettings.Subtitle) ? "Documento comercial" : _invoiceSettings.Subtitle, fontSubtitle, XBrushes.Black, new XRect(pageLeft, pageTop + 28, headerLeftWidth, 22), centerFormat);
+
+                    var extraY = pageTop + 56.0;
+                    if (!string.IsNullOrWhiteSpace(_invoiceSettings.NitLine))
                     {
-                        var page = pdf.AddPage();
-                        page.Width = XUnit.FromPoint(targetWidthPts);
-                        page.Height = XUnit.FromPoint(a4HeightPts);
-
-                        var bmpWidthPx = Math.Max(1, (int)Math.Round(page.Width.Point / 72.0 * renderDpi));
-                        var bmpHeightPx = Math.Max(1, (int)Math.Round(page.Height.Point / 72.0 * renderDpi));
-
-                        var tmpPng = Path.Combine(Path.GetTempPath(), $"invoice_{Guid.NewGuid():N}.png");
-                        tmpFiles.Add(tmpPng);
-                        using (var bmp = new Bitmap(bmpWidthPx, bmpHeightPx))
-                        {
-                            bmp.SetResolution(renderDpi, renderDpi);
-                            using var g = Graphics.FromImage(bmp);
-                            g.PageUnit = GraphicsUnit.Point;
-                            DrawInvoicePrintPage(g, new Rectangle(0, 0, (int)Math.Ceiling((double)page.Width.Point), (int)Math.Ceiling((double)page.Height.Point)), invoice, isDraft, pageIndex, rowsPerPage);
-                            bmp.Save(tmpPng, System.Drawing.Imaging.ImageFormat.Png);
-                        }
-
-                        using var gfxPage = XGraphics.FromPdfPage(page);
-                        using var img = XImage.FromFile(tmpPng);
-                        gfxPage.DrawImage(img, 0, 0, page.Width.Point, page.Height.Point);
-
-                        pageIndex++;
+                        gfxPage.DrawString(_invoiceSettings.NitLine, fontText, XBrushes.Black, new XRect(pageLeft, extraY, headerLeftWidth, 14), centerFormat);
+                        extraY += 14.0;
                     }
-                }
-                finally
-                {
-                    foreach (var f in tmpFiles)
+                    if (!string.IsNullOrWhiteSpace(_invoiceSettings.AddressLine))
                     {
-                        try { if (File.Exists(f)) File.Delete(f); } catch { }
+                        gfxPage.DrawString(_invoiceSettings.AddressLine, fontText, XBrushes.Black, new XRect(pageLeft, extraY, headerLeftWidth, 14), centerFormat);
                     }
+
+                    // Document box
+                    var docX = pageLeft + headerLeftWidth + 16.0;
+                    var docY = pageTop;
+                    var docW = rightBoxWidth;
+                    var docH = 78.0;
+                    gfxPage.DrawRectangle(blackPen, docX, docY, docW, docH);
+                    gfxPage.DrawLine(blackPen, docX, docY + 26.0, docX + docW, docY + 26.0);
+                    gfxPage.DrawString(isDraft ? "FACTURA BORRADOR" : "FACTURA", fontSection, XBrushes.Black, new XRect(docX, docY, docW, 26.0), centerFormat);
+                    gfxPage.DrawString("Nro:", fontText, XBrushes.Black, new XRect(docX + 8, docY + 30, 36, 14), leftFormat);
+                    gfxPage.DrawString(invoice.Numero, fontSection, XBrushes.Black, new XRect(docX + 44, docY + 28, docW - 54, 18), leftFormat);
+                    gfxPage.DrawString("Fecha:", fontText, XBrushes.Black, new XRect(docX + 8, docY + 50, 44, 14), leftFormat);
+                    gfxPage.DrawString(invoice.Fecha.ToString("dd/MM/yyyy"), fontText, XBrushes.Black, new XRect(docX + 54, docY + 50, docW - 64, 14), leftFormat);
+
+                    // Info box
+                    var infoY = pageTop + 92.0;
+                    var infoH = 130.0;
+                    gfxPage.DrawRectangle(blackPen, pageLeft, infoY, pageWidth, infoH);
+                    var lineY2 = infoY + 10.0;
+                    gfxPage.DrawString($"Recibimos de:  {invoice.Cliente}", fontText, XBrushes.Black, new XRect(pageLeft + 8, lineY2, pageWidth * 0.7, 16), leftFormat);
+                    gfxPage.DrawString($"Nit:  {invoice.Nit}", fontText, XBrushes.Black, new XRect(pageLeft + pageWidth * 0.72, lineY2, pageWidth * 0.25, 16), leftFormat);
+
+                    // Table of items on this page
+                    var tableTop = infoY + infoH + 8.0;
+                    var headerH = headerHeight;
+                    var itemsOnPage = items.Skip(pageIndex * rowsPerPage).Take(rowsPerPage).ToList();
+                    var currentRows = Math.Max(itemsOnPage.Count, 1);
+                    var tableHeight = headerH + (currentRows * rowHeight) + 8.0;
+                    gfxPage.DrawRectangle(blackPen, pageLeft, tableTop, pageWidth, tableHeight);
+
+                    var columnTitles = new[] { "Código", "Descripción", "Cant.", "Vr. Unitario", "Pago" };
+                    var weights = new[] { 0.10, 0.50, 0.10, 0.15, 0.15 };
+                    var headerBottom = tableTop + headerH;
+                    gfxPage.DrawLine(thinPen, pageLeft, headerBottom, pageLeft + pageWidth, headerBottom);
+
+                    var colWidths = NormalizeWidths(ComputeColWidths(columnTitles.Length, weights, pageWidth), pageWidth);
+                    if (colWidths.Length < columnTitles.Length)
+                    {
+                        colWidths = NormalizeWidths(Enumerable.Repeat(pageWidth / columnTitles.Length, columnTitles.Length).ToArray(), pageWidth);
+                    }
+
+                    var xPos = pageLeft;
+                    for (var i = 0; i < colWidths.Length; i++)
+                    {
+                        if (i > 0) gfxPage.DrawLine(thinPen, xPos, tableTop, xPos, tableTop + tableHeight);
+                        var w = colWidths[i];
+                        gfxPage.DrawString(columnTitles[i], fontSection, XBrushes.Black, new XRect(xPos + 4, tableTop + 4, w - 8, 16), i >= 2 ? rightFormat : leftFormat);
+                        xPos += w;
+                    }
+
+                    for (var r = 0; r < itemsOnPage.Count; r++)
+                    {
+                        var y = headerBottom + (r * rowHeight);
+                        gfxPage.DrawLine(thinPen, pageLeft, y + rowHeight, pageLeft + pageWidth, y + rowHeight);
+                        var item = itemsOnPage[r];
+                        var cx = pageLeft;
+                        gfxPage.DrawString(item.Codigo, fontMono, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[0] - 12, rowHeight - 8), leftFormat); cx += colWidths[0];
+                        gfxPage.DrawString(item.Descripcion, fontText, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[1] - 12, rowHeight - 8), leftFormat); cx += colWidths[1];
+                        gfxPage.DrawString(item.Cantidad.ToString("N0"), fontText, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[2] - 12, rowHeight - 8), rightFormat); cx += colWidths[2];
+                        gfxPage.DrawString(item.PrecioUnitario.ToString("N0"), fontText, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[3] - 12, rowHeight - 8), rightFormat); cx += colWidths[3];
+                        gfxPage.DrawString(item.TotalLinea.ToString("N0"), fontSection, XBrushes.Black, new XRect(cx + 6, y + 4, colWidths[4] - 12, rowHeight - 8), rightFormat);
+                    }
+
+                    // If last page render totals and bottom block with Valor right-aligned
+                    var isLastPage = (pageIndex + 1) * rowsPerPage >= items.Count;
+                    if (isLastPage)
+                    {
+                        var totalBarTop = tableTop + tableHeight + 4.0;
+                        gfxPage.DrawRectangle(thinPen, pageLeft, totalBarTop, pageWidth, 26.0);
+                        gfxPage.DrawString("Total Factura:", fontSection, XBrushes.Black, new XRect(pageLeft + pageWidth - 340, totalBarTop, 160, 26.0), rightFormat);
+                        gfxPage.DrawString(invoice.Total.ToString("N0"), fontSection, XBrushes.Black, new XRect(pageLeft + pageWidth - 180, totalBarTop, 160, 26.0), rightFormat);
+
+                        var bottomBoxTop = totalBarTop + 26.0 + 4.0;
+                        gfxPage.DrawRectangle(blackPen, pageLeft, bottomBoxTop, pageWidth, bottomBoxHeight);
+                        gfxPage.DrawLine(thinPen, pageLeft, bottomBoxTop + 24.0, pageLeft + pageWidth, bottomBoxTop + 24.0);
+                        gfxPage.DrawString("Forma de pago", fontSection, XBrushes.Black, new XRect(pageLeft, bottomBoxTop, pageWidth * 0.55, 24), centerFormat);
+                        gfxPage.DrawString("Firma y Sello", fontSection, XBrushes.Black, new XRect(pageLeft + (pageWidth * 0.55), bottomBoxTop, pageWidth * 0.45, 24), centerFormat);
+
+                        // Adjusted bottom columns giving more space to last column and right-aligning Valor
+                        var bbLeft = pageLeft;
+                        var bbWidth = pageWidth;
+                        var bbPadding = 6.0;
+                        var colPct = new[] { 0.15, 0.30, 0.20, 0.35 };
+                        var bbCols = colPct.Select(p => p * bbWidth).ToArray();
+                        var tmpX = bbLeft;
+                        for (var i = 0; i < bbCols.Length - 1; i++) { tmpX += bbCols[i]; gfxPage.DrawLine(thinPen, tmpX, bottomBoxTop + 24.0, tmpX, bottomBoxTop + bottomBoxHeight); }
+
+                        var pos = bbLeft;
+                        gfxPage.DrawString("Referencia", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[0] - bbPadding * 2, 18), centerFormat); pos += bbCols[0];
+                        gfxPage.DrawString("Banco / Medio", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[1] - bbPadding * 2, 18), centerFormat); pos += bbCols[1];
+                        gfxPage.DrawString("Responsable", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[2] - bbPadding * 2, 18), centerFormat); pos += bbCols[2];
+                        gfxPage.DrawString("Valor", fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 26, bbCols[3] - bbPadding * 2, 18), centerFormat);
+
+                        pos = bbLeft;
+                        gfxPage.DrawString(invoice.Numero, fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[0] - bbPadding * 2, 18), centerFormat); pos += bbCols[0];
+                        gfxPage.DrawString(invoice.MetodoPago, fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[1] - bbPadding * 2, 18), centerFormat); pos += bbCols[1];
+                        gfxPage.DrawString(invoice.Cliente, fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[2] - bbPadding * 2, 18), centerFormat); pos += bbCols[2];
+                        gfxPage.DrawString(invoice.Total.ToString("N0"), fontText, XBrushes.Black, new XRect(pos + bbPadding, bottomBoxTop + 50, bbCols[3] - bbPadding * 2, 18), rightFormat);
+
+                        if (!string.IsNullOrWhiteSpace(invoice.Notas)) gfxPage.DrawString($"Notas: {invoice.Notas}", fontSmall, XBrushes.Black, new XRect(pageLeft + pageWidth * 0.57, bottomBoxTop + 30, pageWidth * 0.4, 34));
+                        if (!string.IsNullOrWhiteSpace(_invoiceSettings.FooterText)) gfxPage.DrawString(_invoiceSettings.FooterText, fontSmall, XBrushes.DimGray, new XRect(pageLeft, bottomBoxTop + bottomBoxHeight + 6, pageWidth, 40), centerFormat);
+                    }
+
+                    pageIndex++;
                 }
             }
 
-            // Save PDF to a temporary file first then move to target path to avoid creating empty files on failure
-            var tmpPdf = Path.Combine(Path.GetTempPath(), $"invoice_pdf_{Guid.NewGuid():N}.pdf");
-            try
-            {
-                using (var fsTmp = File.Create(tmpPdf))
-                {
-                    pdf.Save(fsTmp);
-                }
+            // Save PDF
+            using var fs = File.OpenWrite(path);
+            pdf.Save(fs);
 
-                // Copy to destination (overwrite if exists)
-                File.Copy(tmpPdf, path, overwrite: true);
-
-                MessageBox.Show($"PDF guardado en:\n{path}", "Exportar a PDF", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            finally
-            {
-                try { if (File.Exists(tmpPdf)) File.Delete(tmpPdf); } catch { }
-            }
+            MessageBox.Show($"PDF guardado en:\n{path}", "Exportar a PDF", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
